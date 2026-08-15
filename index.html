@@ -121,7 +121,7 @@
 
     <div class="mode-block" style="border-color:#dbe6f5;">
       <h3 style="color:var(--blue);">🎯 模擬練習</h3>
-      <p class="desc">從全部題庫（含尚未上架之題目）隨機抽題、每次題目不同；答完每題立即顯示正解與解析，成績不列入紀錄，可無限次練習。</p>
+      <p class="desc">每次由 AI 重新閱讀集團最新文件現場出題（混部分題庫題目），題目每次不同；答完每題立即顯示正解與解析，成績不列入紀錄，可無限次練習。出題約需 10~30 秒，請耐心等候。</p>
       <label class="field" style="margin-top:10px;">練習題數</label>
       <select class="inp" id="pracCount" style="max-width:220px;">
         <option value="5">5 題（快速練習）</option>
@@ -387,7 +387,7 @@ function submitQuiz() {
 function startPractice(r){
   role = r;
   var cnt = $('pracCount') ? $('pracCount').value : '20';
-  $('loadingText').textContent = '模擬題組載入中…';
+  $('loadingText').textContent = 'AI 正在重新閱讀文件出題，約需 10~30 秒，請稍候…';
   show('loadingCard');
   get({action:'getPractice', role:r, count:cnt, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
     if (res.error) { show('menuCard'); alert(res.error); return; }
