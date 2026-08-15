@@ -114,21 +114,23 @@
     </div>
 
     <div class="mode-block">
-      <h3>📝 正式測驗</h3>
-      <p class="desc">計入成績、每帳號每份考卷限作答一次，交卷後顯示成績與解析。</p>
-      <div class="role-grid">
-        <div class="role-btn" id="fmDoctor" onclick="startFormal('doctor')">
-          <div class="icon">🩺</div><h3>醫師版</h3><p>抽審回饋・處方原則・健保指標</p>
-        </div>
-        <div class="role-btn" id="fmStaff" onclick="startFormal('staff')">
-          <div class="icon">💼</div><h3>一般人員版</h3><p>工作規則・掛號 SOP・宣導事項</p>
-        </div>
-      </div>
+      <h3>📝 正式測驗 <button class="btn btn-ghost" style="float:right;padding:5px 12px;font-size:.8rem;" onclick="refreshPapers()">🔄 重新整理</button></h3>
+      <p class="desc">以下為目前開放中的考卷。計入成績、每帳號每張考卷限作答一次，交卷後顯示成績與解析。</p>
+      <div id="paperList"></div>
     </div>
 
     <div class="mode-block" style="border-color:#dbe6f5;">
       <h3 style="color:var(--blue);">🎯 模擬練習</h3>
-      <p class="desc">從全部題庫隨機抽題、每次題目不同；答完每題立即顯示正解與解析，成績不列入紀錄，可無限次練習。</p>
+      <p class="desc">從全部題庫（含尚未上架之題目）隨機抽題、每次題目不同；答完每題立即顯示正解與解析，成績不列入紀錄，可無限次練習。</p>
+      <label class="field" style="margin-top:10px;">練習題數</label>
+      <select class="inp" id="pracCount" style="max-width:220px;">
+        <option value="5">5 題（快速練習）</option>
+        <option value="10">10 題</option>
+        <option value="20" selected>20 題（同正式卷）</option>
+        <option value="30">30 題</option>
+        <option value="50">50 題</option>
+        <option value="999">全部題庫</option>
+      </select>
       <div class="role-grid">
         <div class="role-btn" onclick="startPractice('doctor')">
           <div class="icon">🩺</div><h3>醫師版 模擬</h3><p>隨機抽題練習</p>
@@ -253,29 +255,46 @@ function doLogin(){
   });
 }
 
+var _papers = [];
 function renderMenu(){
   $('whoName').textContent = AUTH.name;
   $('whoClinic').textContent = AUTH.clinic;
   $('whoId').textContent = AUTH.empId;
-  markFormal('fmDoctor', AUTH.attempts && AUTH.attempts.doctor);
-  markFormal('fmStaff', AUTH.attempts && AUTH.attempts.staff);
+  renderPapers();
   show('menuCard');
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
-function markFormal(btnId, rec){
-  var el = $(btnId);
-  var old = el.querySelector('.done-tag');
-  if (old) old.remove();
-  if (rec) {
-    el.classList.add('locked');
-    var tag = document.createElement('span');
-    tag.className = 'done-tag';
-    tag.textContent = '已完成 '+rec.score+' 分';
-    el.appendChild(tag);
-  } else {
-    el.classList.remove('locked');
+function renderPapers(){
+  _papers = (AUTH.papers || []).slice();
+  var att = AUTH.attempts || {};
+  if (!_papers.length) {
+    $('paperList').innerHTML = '<p class="note" style="text-align:center;padding:14px 0;">目前沒有開放中的考卷，請留意診所公告。</p>';
+    return;
   }
+  var html = '<div class="role-grid">';
+  _papers.forEach(function(pp, i){
+    var rec = att[pp.paperNo];
+    var roleLabel = pp.role==='doctor' ? '🩺 醫師版' : '💼 一般人員版';
+    var period = (pp.end ? '截止：'+pp.end : '無期限');
+    html += '<div class="role-btn '+(rec?'locked':'')+'" onclick="startFormal('+i+')">'
+      + (rec ? '<span class="done-tag">已完成 '+rec.score+' 分</span>' : '')
+      + '<h3>'+esc(pp.name)+'</h3>'
+      + '<p>'+roleLabel+'｜'+pp.count+' 題｜卷號 '+esc(pp.paperNo)+'</p>'
+      + '<p>'+esc(period)+'</p>'
+      + '</div>';
+  });
+  html += '</div>';
+  $('paperList').innerHTML = html;
+}
+
+function refreshPapers(){
+  if (!CRED) return;
+  get({action:'login', clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
+    if (res.error) { alert(res.error); logout(); return; }
+    AUTH = res;
+    renderPapers();
+  });
 }
 
 function logout(){
@@ -285,22 +304,26 @@ function logout(){
   show('loginCard');
 }
 
-/* ===== 正式測驗 ===== */
-function startFormal(r){
-  var rec = r==='doctor' ? (AUTH.attempts && AUTH.attempts.doctor) : (AUTH.attempts && AUTH.attempts.staff);
-  if (rec) { alert('您已完成此份正式測驗（'+rec.time+'，'+rec.score+' 分），每帳號限作答一次。可改用「模擬練習」複習。'); return; }
-  if (!confirm('正式測驗每帳號限作答一次，確定要開始「'+(r==='doctor'?'醫師版':'一般人員版')+'」正式測驗嗎？')) return;
-  role = r;
+/* ===== 正式測驗（考卷制） ===== */
+var PAPER = null; // {paperNo, name, role}
+function startFormal(i){
+  var pp = _papers[i];
+  if (!pp) { alert('找不到考卷，請按重新整理'); return; }
+  var rec = (AUTH.attempts || {})[pp.paperNo];
+  if (rec) { alert('您已完成考卷 '+pp.paperNo+'（'+rec.time+'，'+rec.score+' 分），每帳號每卷限作答一次。可改用「模擬練習」複習。'); return; }
+  if (!confirm('正式測驗每帳號每卷限作答一次，確定要開始「'+pp.name+'」（卷號 '+pp.paperNo+'、'+pp.count+' 題）嗎？')) return;
+  PAPER = pp;
+  role = pp.role;
   $('loadingText').textContent = '考卷載入中…';
   show('loadingCard');
-  get({action:'getExam', role:r, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
+  get({action:'getPaperExam', paperNo:pp.paperNo, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
     if (res.error) { show('menuCard'); alert(res.error); return; }
-    if (!res.questions || !res.questions.length) { show('menuCard'); alert('目前尚無已上架的考題，請聯絡管理者。'); return; }
+    if (!res.questions || !res.questions.length) { show('menuCard'); alert('此考卷沒有題目，請聯絡管理者。'); return; }
     QUESTIONS = res.questions;
     PASS_SCORE = res.passScore || 80;
     idx = 0;
     answers = new Array(QUESTIONS.length).fill(null);
-    $('roleTag').textContent = '正式測驗・'+(r==='doctor' ? '醫師版' : '一般人員版');
+    $('roleTag').textContent = esc(res.paperNo)+'・'+res.paperName;
     show('quizCard');
     renderQ();
     window.scrollTo({top:0, behavior:'smooth'});
@@ -349,12 +372,12 @@ function submitQuiz() {
   var ans = answers.map(function(a){return LETTERS[a];}).join(',');
   $('loadingText').textContent = '閱卷中，請稍候…';
   show('loadingCard');
-  get({action:'submitExam', role:role, qids:qids, answers:ans, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
+  get({action:'submitExam', paperNo:PAPER.paperNo, qids:qids, answers:ans, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
     if (res.error) { show('quizCard'); alert(res.error); return; }
-    // 更新本地 attempts，回選單時鎖定
-    if (AUTH && AUTH.attempts) {
-      var rec = { score: res.score, pass: res.pass?'及格':'不及格', time: nowStr() };
-      if (role==='doctor') AUTH.attempts.doctor = rec; else AUTH.attempts.staff = rec;
+    // 更新本地 attempts，回選單時鎖定此卷
+    if (AUTH) {
+      AUTH.attempts = AUTH.attempts || {};
+      AUTH.attempts[PAPER.paperNo] = { score: res.score, pass: res.pass?'及格':'不及格', time: nowStr() };
     }
     renderResult(res, false);
   });
@@ -363,9 +386,10 @@ function submitQuiz() {
 /* ===== 模擬練習（即答即回饋） ===== */
 function startPractice(r){
   role = r;
+  var cnt = $('pracCount') ? $('pracCount').value : '20';
   $('loadingText').textContent = '模擬題組載入中…';
   show('loadingCard');
-  get({action:'getPractice', role:r, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
+  get({action:'getPractice', role:r, count:cnt, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
     if (res.error) { show('menuCard'); alert(res.error); return; }
     P = { qs: res.questions, idx: 0, correct: 0, answered: false, results: [] };
     PASS_SCORE = res.passScore || 80;
@@ -451,9 +475,9 @@ function renderResult(res, isPractice) {
   $('scoreNum').textContent = res.score + ' 分';
   $('scoreNum').className = 'score-big ' + (res.pass ? 'pass' : 'fail');
   var info = '受測人：<b>'+esc(AUTH ? AUTH.name : '')+'</b>（'+esc(AUTH ? AUTH.clinic : '')+'・'+esc(AUTH ? AUTH.empId : '')+'）'
-    + '｜'+(role==='doctor'?'醫師版':'一般人員版')
+    + (isPractice ? '｜'+(role==='doctor'?'醫師版':'一般人員版')+'模擬' : '｜'+esc(res.paperNo||'')+' '+esc(res.paperName||''))
     + '｜答對 '+res.correct+'/'+res.total+' 題｜'+nowStr()
-    + (isPractice ? '' : '（成績已回報，每帳號限作答一次）');
+    + (isPractice ? '' : '（成績已回報，每帳號每卷限作答一次）');
   $('scoreSub').innerHTML = info;
   $('resultBtns').innerHTML = isPractice
     ? '<button class="btn btn-blue" onclick="retryPractice()">🔄 再練一組（重新隨機抽題）</button> <button class="btn btn-ghost" onclick="renderMenu()">回選單</button>'
