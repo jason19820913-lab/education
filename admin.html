@@ -113,6 +113,7 @@
       <div class="tab on" id="tab-draft" onclick="switchTab('draft')">📝 待審核</div>
       <div class="tab" id="tab-approved" onclick="switchTab('approved')">✅ 已上架</div>
       <div class="tab" id="tab-rejected" onclick="switchTab('rejected')">🗑 已退回</div>
+      <div class="tab" id="tab-own" onclick="switchTab('own')">✍️ 自行出題</div>
       <div class="tab" id="tab-papers" onclick="switchTab('papers')">🗂 考卷管理</div>
       <div class="tab" id="tab-scores" onclick="switchTab('scores')">📊 成績紀錄</div>
       <div class="tab" id="tab-admins" onclick="switchTab('admins')">👥 管理者白名單</div>
@@ -205,13 +206,57 @@ function refreshAll(){
 function switchTab(tab, keepFilter){
   curTab = tab;
   if (!keepFilter) _roleFilter = '';
-  ['draft','approved','rejected','papers','scores','admins'].forEach(function(t){
+  ['draft','approved','rejected','own','papers','scores','admins'].forEach(function(t){
     $('tab-'+t).className = 'tab' + (t===tab ? ' on' : '');
   });
   if (tab === 'scores') loadScores();
   else if (tab === 'admins') loadAdmins();
   else if (tab === 'papers') loadPapers();
+  else if (tab === 'own') renderOwnForm();
   else loadList(tab);
+}
+
+/* ===== 自行出題 ===== */
+function renderOwnForm(){
+  $('listArea').innerHTML =
+    '<h3 style="color:var(--brand-dark);">✍️ 自行出題</h3>'
+    + '<p class="note">自己撰寫題目與答案，可「直接上架」進題庫（即可被選入考卷／模擬練習），或先「存為待審」之後再核准。醫師版題目前台一律不顯示出處。</p>'
+    + '<div class="row2">'
+    + '<div class="fld"><label>身分別</label><select id="ownRole"><option value="doctor">醫師版</option><option value="staff">一般人員版</option></select></div>'
+    + '<div class="fld"><label>正確答案</label><select id="ownAns"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>'
+    + '</div>'
+    + '<div class="fld"><label>題目</label><textarea id="ownQ" placeholder="請輸入題目敘述"></textarea></div>'
+    + '<div class="row2">'
+    + '<div class="fld"><label>選項 A</label><input id="ownA"></div>'
+    + '<div class="fld"><label>選項 B</label><input id="ownB"></div>'
+    + '<div class="fld"><label>選項 C</label><input id="ownC"></div>'
+    + '<div class="fld"><label>選項 D</label><input id="ownD"></div>'
+    + '</div>'
+    + '<div class="fld"><label>解析（選填，作答後顯示）</label><textarea id="ownExplain"></textarea></div>'
+    + '<div class="fld"><label>出處（選填；醫師版前台不會顯示）</label><input id="ownSource"></div>'
+    + '<div style="margin-top:14px;">'
+    + '<button class="btn btn-ok" onclick="submitOwn(\'approved\')">✅ 建立並直接上架</button>'
+    + '<button class="btn btn-primary" onclick="submitOwn(\'draft\')">📝 建立為待審</button>'
+    + '</div>';
+}
+
+function submitOwn(status){
+  var d = {
+    action:'addQuestion', status:status,
+    role:$('ownRole').value, ans:$('ownAns').value,
+    q:$('ownQ').value.trim(),
+    oA:$('ownA').value.trim(), oB:$('ownB').value.trim(),
+    oC:$('ownC').value.trim(), oD:$('ownD').value.trim(),
+    explain:$('ownExplain').value.trim(), source:$('ownSource').value.trim()
+  };
+  if (!d.q) { toast('請輸入題目','err'); return; }
+  if (!d.oA || !d.oB || !d.oC || !d.oD) { toast('四個選項皆須填寫','err'); return; }
+  get(d, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast(status==='approved' ? '題目已建立並上架' : '題目已建立為待審');
+    ['ownQ','ownA','ownB','ownC','ownD','ownExplain','ownSource'].forEach(function(id){ $(id).value=''; });
+    get({action:'stats'}, function(s){ if(!s.error) renderStats(s); });
+  });
 }
 
 function filterFromCard(role, status){
