@@ -69,9 +69,18 @@
 
   <div id="loginCard" class="card">
     <h3 style="color:var(--brand-dark);margin-bottom:10px;">管理者登入</h3>
-    <input type="password" id="adminKey" placeholder="請輸入管理密鑰">
-    <div style="margin-top:12px;"><button class="btn btn-primary" onclick="login()">登入</button></div>
-    <p class="note">密鑰儲存於試算表「設定」工作表 adminKey，可自行修改。</p>
+    <div id="empLoginBox">
+      <input type="text" id="admEmpId" placeholder="員工編號（需在管理者白名單內）" style="margin-bottom:8px;">
+      <input type="password" id="admEmpPwd" placeholder="密碼（同員工資料庫密碼）">
+      <div style="margin-top:12px;"><button class="btn btn-primary" onclick="login()">登入</button>
+        <button class="btn btn-ghost" onclick="toggleKeyLogin(true)">改用管理密鑰</button></div>
+    </div>
+    <div id="keyLoginBox" class="hidden">
+      <input type="password" id="adminKey" placeholder="請輸入管理密鑰">
+      <div style="margin-top:12px;"><button class="btn btn-primary" onclick="login()">登入</button>
+        <button class="btn btn-ghost" onclick="toggleKeyLogin(false)">改用員工編號登入</button></div>
+    </div>
+    <p class="note">白名單於後台「👥 管理者白名單」分頁維護（或直接編輯試算表「管理者白名單」工作表）；白名單為空時請先用管理密鑰登入，把自己加入白名單。</p>
   </div>
 
   <div id="mainArea" class="hidden">
@@ -87,6 +96,7 @@
       <div class="tab" id="tab-approved" onclick="switchTab('approved')">✅ 已上架</div>
       <div class="tab" id="tab-rejected" onclick="switchTab('rejected')">🗑 已退回</div>
       <div class="tab" id="tab-scores" onclick="switchTab('scores')">📊 成績紀錄</div>
+      <div class="tab" id="tab-admins" onclick="switchTab('admins')">👥 管理者白名單</div>
     </div>
 
     <div id="listArea" class="card"><div class="empty">載入中…</div></div>
@@ -98,7 +108,7 @@
 /* ★ 部署 Apps Script 後，把 /exec 網址貼在這裡（與 index.html 相同） ★ */
 var API = 'https://script.google.com/macros/s/AKfycbw9_VbOGapiSPTrPo7nqRo4UkvhEywulkoY-4f_aj1erETANrghR404bgmAvZIFSGvP/exec';
 
-var KEY = '';
+var ADM = null; // {key} 或 {aid, apwd}
 var _qRecs = [];
 var curTab = 'draft';
 
@@ -111,7 +121,7 @@ function toast(msg, type){
   setTimeout(function(){ t.className = 'toast'; }, 2600);
 }
 function get(params, cb){
-  params.key = KEY;
+  if (ADM) { Object.keys(ADM).forEach(function(k){ params[k] = ADM[k]; }); }
   var q = Object.keys(params).map(function(k){
     return encodeURIComponent(k)+'='+encodeURIComponent(params[k]==null?'':params[k]);
   }).join('&');
@@ -120,15 +130,32 @@ function get(params, cb){
   });
 }
 
+function toggleKeyLogin(useKey){
+  $('empLoginBox').classList.toggle('hidden', useKey);
+  $('keyLoginBox').classList.toggle('hidden', !useKey);
+}
+
 function login(){
-  KEY = $('adminKey').value.trim();
-  if (!KEY) { toast('請輸入管理密鑰','err'); return; }
-  get({action:'stats'}, function(res){
-    if (res.error) { toast(res.error,'err'); return; }
-    $('loginCard').classList.add('hidden');
-    $('mainArea').classList.remove('hidden');
-    renderStats(res);
-    loadList('draft');
+  if ($('keyLoginBox').classList.contains('hidden')) {
+    var aid = $('admEmpId').value.trim();
+    var apwd = $('admEmpPwd').value.trim();
+    if (!aid || !apwd) { toast('請輸入員工編號與密碼','err'); return; }
+    ADM = { aid: aid, apwd: apwd };
+  } else {
+    var key = $('adminKey').value.trim();
+    if (!key) { toast('請輸入管理密鑰','err'); return; }
+    ADM = { key: key };
+  }
+  get({action:'adminLogin'}, function(res){
+    if (res.error) { ADM = null; toast(res.error,'err'); return; }
+    toast('歡迎，'+res.name);
+    get({action:'stats'}, function(s){
+      if (s.error) { toast(s.error,'err'); return; }
+      $('loginCard').classList.add('hidden');
+      $('mainArea').classList.remove('hidden');
+      renderStats(s);
+      loadList('draft');
+    });
   });
 }
 
@@ -147,11 +174,60 @@ function refreshAll(){
 
 function switchTab(tab){
   curTab = tab;
-  ['draft','approved','rejected','scores'].forEach(function(t){
+  ['draft','approved','rejected','scores','admins'].forEach(function(t){
     $('tab-'+t).className = 'tab' + (t===tab ? ' on' : '');
   });
   if (tab === 'scores') loadScores();
+  else if (tab === 'admins') loadAdmins();
   else loadList(tab);
+}
+
+/* ===== 管理者白名單 ===== */
+var _admRecs = [];
+function loadAdmins(){
+  $('listArea').innerHTML = '<div class="loading">載入中…</div>';
+  get({action:'listAdmins'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    _admRecs = res.admins || [];
+    var html = '<p class="note">白名單內的員工編號可用「員工編號＋員工資料庫密碼」登入後台。白名單為空時，僅能以管理密鑰登入。</p>'
+      + '<div class="row2" style="align-items:end;">'
+      + '<div class="fld"><label>新增員工編號</label><input id="newAdmId" placeholder="例：0011"></div>'
+      + '<div class="fld"><label>備註（選填）</label><input id="newAdmNote" placeholder="例：策略長"></div>'
+      + '</div>'
+      + '<div style="margin-top:10px;"><button class="btn btn-primary" onclick="doAddAdmin()">➕ 加入白名單</button></div>';
+    if (!_admRecs.length) {
+      html += '<div class="empty">白名單目前是空的</div>';
+    } else {
+      html += '<table><tr><th>員工編號</th><th>姓名</th><th>院區</th><th>備註</th><th>加入時間</th><th></th></tr>';
+      _admRecs.forEach(function(a, i){
+        html += '<tr><td>'+esc(a.empId)+'</td><td>'+esc(a.name)+'</td><td>'+esc(a.clinic)+'</td><td>'+esc(a.note)+'</td><td>'+esc(a.added)+'</td>'
+          + '<td><button class="btn btn-bad" onclick="doRemoveAdmin('+i+')">移除</button></td></tr>';
+      });
+      html += '</table>';
+    }
+    $('listArea').innerHTML = html;
+  });
+}
+
+function doAddAdmin(){
+  var id = $('newAdmId').value.trim();
+  if (!id) { toast('請輸入員工編號','err'); return; }
+  get({action:'addAdmin', empId:id, note:$('newAdmNote').value.trim()}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('已將 '+res.name+'（'+res.empId+'）加入白名單');
+    loadAdmins();
+  });
+}
+
+function doRemoveAdmin(i){
+  var a = _admRecs[i];
+  if (!a) { toast('找不到資料，請重新整理','err'); return; }
+  if (!confirm('確定將 '+a.name+'（'+a.empId+'）移出管理者白名單？')) return;
+  get({action:'removeAdmin', empId:a.empId}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('已移除');
+    loadAdmins();
+  });
 }
 
 function loadList(status){
@@ -276,7 +352,10 @@ function loadScores(){
 }
 
 document.addEventListener('keydown', function(ev){
-  if (ev.key === 'Enter' && !$('loginCard').classList.contains('hidden') && document.activeElement === $('adminKey')) login();
+  if (ev.key === 'Enter' && !$('loginCard').classList.contains('hidden')) {
+    var a = document.activeElement;
+    if (a === $('adminKey') || a === $('admEmpId') || a === $('admEmpPwd')) login();
+  }
 });
 </script>
 </body>
