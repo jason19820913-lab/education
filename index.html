@@ -435,7 +435,7 @@ function pPick(i){
   $('pFeedback').innerHTML = '<div class="fb '+(ok?'ok':'ng')+'">'
     + '<b>'+(ok ? '✔ 答對了！' : '✘ 答錯了，正確答案是 '+q.ans+'。')+'</b>'
     + '<div style="margin-top:4px;">'+esc(q.explain||'')+'</div>'
-    + '<div class="src">📄 出處：'+esc(q.source||'')+'</div>'
+    + (q.source ? '<div class="src">📄 出處：'+esc(q.source)+'</div>' : '')
     + '</div>';
   $('pNextBtn').textContent = (P.idx === P.qs.length-1) ? '看總成績' : '下一題';
   $('pNextBtn').classList.remove('hidden');
@@ -491,7 +491,7 @@ function renderResult(res, isPractice) {
       + '<p>您的作答：'+r.your+'. '+esc(opts[r.your]||'')+'</p>'
       + (r.ok ? '' : '<p><b>正確答案：'+r.ans+'. '+esc(opts[r.ans]||'')+'</b></p>')
       + '<p>'+esc(r.explain||'')+'</p>'
-      + '<p class="src">📄 出處：'+esc(r.source||'')+'</p>'
+      + (r.source ? '<p class="src">📄 出處：'+esc(r.source)+'</p>' : '')
       + '</div>';
   });
   $('reviewList').innerHTML = html;
