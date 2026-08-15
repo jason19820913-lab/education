@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>金鶯集團 員工教育訓練測驗</title>
+<style>
+  :root{
+    --brand:#0f6b5f; --brand-dark:#0a4a42; --brand-light:#e6f2f0;
+    --gold:#c9962e; --bg:#f4f6f5; --card:#fff; --ink:#1f2a28; --muted:#6b7a77;
+    --good:#1d8a4e; --bad:#c0392b; --blue:#1d4e89; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;background:var(--bg);color:var(--ink);line-height:1.65;}
+  .wrap{max-width:820px;margin:0 auto;padding:24px 16px 60px;}
+  header.top{background:linear-gradient(135deg,var(--brand-dark),var(--brand));color:#fff;padding:28px 16px;text-align:center;}
+  header.top h1{font-size:1.5rem;letter-spacing:.08em;}
+  header.top p{opacity:.85;font-size:.9rem;margin-top:6px;}
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:0 2px 10px rgba(15,60,54,.08);padding:24px;margin-top:20px;}
+  .hidden{display:none !important;}
+  .pill{display:inline-block;background:var(--brand-light);color:var(--brand-dark);border-radius:999px;padding:3px 12px;font-size:.78rem;font-weight:600;}
+  .pill.practice{background:#e3ecfb;color:var(--blue);}
+  label.field{display:block;font-size:.88rem;color:var(--muted);margin-bottom:5px;margin-top:12px;}
+  input.inp,select.inp{width:100%;padding:10px 12px;border:1.5px solid #d5dedc;border-radius:10px;font-size:1rem;background:#fff;}
+  input.inp:focus,select.inp:focus{outline:none;border-color:var(--brand);}
+  button.btn{border:none;border-radius:10px;padding:11px 22px;font-size:.95rem;font-weight:600;cursor:pointer;}
+  .btn-primary{background:var(--brand);color:#fff;}
+  .btn-primary:hover{background:var(--brand-dark);}
+  .btn-ghost{background:#eef2f1;color:var(--ink);}
+  .btn-gold{background:var(--gold);color:#fff;}
+  .btn-blue{background:var(--blue);color:#fff;}
+  .btn[disabled]{opacity:.4;cursor:not-allowed;}
+  .role-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;}
+  @media(max-width:560px){.role-grid{grid-template-columns:1fr;}}
+  .role-btn{border:2px solid var(--brand-light);border-radius:var(--radius);background:#fff;padding:18px 14px;cursor:pointer;text-align:center;transition:.15s;position:relative;}
+  .role-btn:hover{border-color:var(--brand);transform:translateY(-2px);}
+  .role-btn.locked{opacity:.55;cursor:not-allowed;}
+  .role-btn.locked:hover{transform:none;border-color:var(--brand-light);}
+  .role-btn .icon{font-size:1.8rem;}
+  .role-btn h3{color:var(--brand-dark);margin:6px 0 3px;font-size:1.05rem;}
+  .role-btn p{font-size:.8rem;color:var(--muted);}
+  .done-tag{position:absolute;top:8px;right:8px;background:#e3f5ea;color:var(--good);font-size:.72rem;font-weight:700;border-radius:999px;padding:2px 9px;}
+  .mode-block{border:1.5px solid #e2e9e7;border-radius:12px;padding:16px;margin-top:14px;}
+  .mode-block h3{font-size:1rem;margin-bottom:2px;}
+  .mode-block .desc{font-size:.82rem;color:var(--muted);}
+  .progress-bar{height:8px;background:#e2e9e7;border-radius:99px;overflow:hidden;margin:14px 0 4px;}
+  .progress-bar>div{height:100%;background:linear-gradient(90deg,var(--brand),var(--gold));width:0%;transition:.3s;}
+  .qmeta{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--muted);flex-wrap:wrap;gap:6px;}
+  .qtext{font-size:1.08rem;font-weight:700;margin:14px 0 16px;}
+  .opt{display:flex;gap:10px;align-items:flex-start;border:1.5px solid #dde5e3;border-radius:12px;padding:12px 14px;margin-bottom:10px;cursor:pointer;transition:.12s;font-size:.97rem;}
+  .opt:hover{border-color:var(--brand);}
+  .opt.sel{border-color:var(--brand);background:var(--brand-light);}
+  .opt.right{border-color:var(--good);background:#e3f5ea;}
+  .opt.wrong{border-color:var(--bad);background:#fdecea;}
+  .opt.dim{pointer-events:none;}
+  .opt .abc{font-weight:700;color:var(--brand-dark);min-width:1.4em;}
+  .fb{border-radius:10px;padding:12px 14px;margin-top:4px;font-size:.9rem;}
+  .fb.ok{background:#e3f5ea;} .fb.ng{background:#fdecea;}
+  .fb .src{color:var(--muted);font-size:.8rem;margin-top:4px;}
+  .navrow{display:flex;justify-content:space-between;gap:10px;margin-top:18px;}
+  .dots{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;}
+  .dot{width:30px;height:30px;border-radius:8px;background:#e2e9e7;color:var(--muted);font-size:.75rem;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:600;}
+  .dot.done{background:var(--brand);color:#fff;}
+  .dot.cur{outline:2px solid var(--gold);}
+  .score-big{font-size:3.2rem;font-weight:800;text-align:center;}
+  .score-big.pass{color:var(--good);} .score-big.fail{color:var(--bad);}
+  .score-sub{text-align:center;color:var(--muted);margin-bottom:14px;}
+  .badge{display:block;width:max-content;margin:0 auto 10px;padding:5px 18px;border-radius:999px;font-weight:700;font-size:.95rem;}
+  .badge.pass{background:#e3f5ea;color:var(--good);} .badge.fail{background:#fdecea;color:var(--bad);}
+  .badge.practice{background:#e3ecfb;color:var(--blue);}
+  .review-q{border-left:4px solid #dde5e3;padding:12px 14px;margin-top:14px;background:#fafcfb;border-radius:0 10px 10px 0;}
+  .review-q.ok{border-left-color:var(--good);} .review-q.ng{border-left-color:var(--bad);}
+  .review-q h4{font-size:.97rem;margin-bottom:6px;}
+  .review-q .tag{font-size:.78rem;font-weight:700;}
+  .review-q .tag.ok{color:var(--good);} .review-q .tag.ng{color:var(--bad);}
+  .review-q p{font-size:.88rem;margin-top:4px;}
+  .review-q .src{color:var(--muted);font-size:.8rem;margin-top:6px;}
+  .center{text-align:center;}
+  .note{font-size:.82rem;color:var(--muted);margin-top:10px;}
+  .loading{text-align:center;padding:40px 0;color:var(--muted);}
+  .spinner{width:36px;height:36px;border:4px solid var(--brand-light);border-top-color:var(--brand);border-radius:50%;margin:0 auto 12px;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .userbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+  .userbar .who{font-size:.92rem;}
+  .err{color:var(--bad);font-size:.85rem;margin-top:8px;min-height:1.2em;}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>金鶯集團 員工教育訓練測驗</h1>
+  <p>依據集團公告資料庫最新文件出題・正式測驗每帳號限作答一次</p>
+</header>
+<div class="wrap">
+
+  <!-- 登入 -->
+  <div id="loginCard" class="card">
+    <span class="pill">員工登入</span>
+    <label class="field">院區</label>
+    <select class="inp" id="clinicSel"><option value="">載入中…</option></select>
+    <label class="field">員工編號</label>
+    <input class="inp" id="empId" type="text" placeholder="例：0123" maxlength="20" autocomplete="username">
+    <label class="field">密碼</label>
+    <input class="inp" id="empPwd" type="password" placeholder="請輸入密碼" maxlength="40" autocomplete="current-password">
+    <div class="err" id="loginErr"></div>
+    <div style="margin-top:8px;"><button class="btn btn-primary" id="loginBtn" onclick="doLogin()">登入</button></div>
+    <p class="note">※ 帳號為人資系統之員工編號；密碼如有問題請洽管理團隊。</p>
+  </div>
+
+  <!-- 模式選單 -->
+  <div id="menuCard" class="card hidden">
+    <div class="userbar">
+      <span class="who">👤 <b id="whoName"></b>（<span id="whoClinic"></span>・<span id="whoId"></span>）</span>
+      <button class="btn btn-ghost" onclick="logout()">登出</button>
+    </div>
+
+    <div class="mode-block">
+      <h3>📝 正式測驗</h3>
+      <p class="desc">計入成績、每帳號每份考卷限作答一次，交卷後顯示成績與解析。</p>
+      <div class="role-grid">
+        <div class="role-btn" id="fmDoctor" onclick="startFormal('doctor')">
+          <div class="icon">🩺</div><h3>醫師版</h3><p>抽審回饋・處方原則・健保指標</p>
+        </div>
+        <div class="role-btn" id="fmStaff" onclick="startFormal('staff')">
+          <div class="icon">💼</div><h3>一般人員版</h3><p>工作規則・掛號 SOP・宣導事項</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-block" style="border-color:#dbe6f5;">
+      <h3 style="color:var(--blue);">🎯 模擬練習</h3>
+      <p class="desc">從全部題庫隨機抽題、每次題目不同；答完每題立即顯示正解與解析，成績不列入紀錄，可無限次練習。</p>
+      <div class="role-grid">
+        <div class="role-btn" onclick="startPractice('doctor')">
+          <div class="icon">🩺</div><h3>醫師版 模擬</h3><p>隨機抽題練習</p>
+        </div>
+        <div class="role-btn" onclick="startPractice('staff')">
+          <div class="icon">💼</div><h3>一般人員版 模擬</h3><p>隨機抽題練習</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingCard" class="card hidden">
+    <div class="loading"><div class="spinner"></div><span id="loadingText">載入中…</span></div>
+  </div>
+
+  <!-- 正式測驗作答 -->
+  <div id="quizCard" class="card hidden">
+    <div class="qmeta">
+      <span class="pill" id="roleTag"></span>
+      <span id="qCounter"></span>
+    </div>
+    <div class="progress-bar"><div id="pbar"></div></div>
+    <div class="qtext" id="qText"></div>
+    <div id="opts"></div>
+    <div class="navrow">
+      <button class="btn btn-ghost" id="prevBtn" onclick="move(-1)">上一題</button>
+      <button class="btn btn-primary" id="nextBtn" onclick="move(1)">下一題</button>
+      <button class="btn btn-gold hidden" id="submitBtn" onclick="submitQuiz()">交卷</button>
+    </div>
+    <div class="dots" id="dots"></div>
+    <p class="note">點選題號可跳題；全部作答完畢後即可交卷。正式測驗僅此一次機會，請謹慎作答。</p>
+  </div>
+
+  <!-- 模擬練習作答（即答即回饋） -->
+  <div id="pracCard" class="card hidden">
+    <div class="qmeta">
+      <span class="pill practice" id="pRoleTag"></span>
+      <span id="pCounter"></span>
+      <span id="pScore"></span>
+    </div>
+    <div class="progress-bar"><div id="ppbar"></div></div>
+    <div class="qtext" id="pQText"></div>
+    <div id="pOpts"></div>
+    <div id="pFeedback"></div>
+    <div class="navrow">
+      <span></span>
+      <button class="btn btn-blue hidden" id="pNextBtn" onclick="pNext()">下一題</button>
+    </div>
+    <p class="note">模擬練習：選擇答案後立即顯示正解與解析，成績不列入紀錄。</p>
+  </div>
+
+  <!-- 成績 -->
+  <div id="resultCard" class="card hidden">
+    <span class="badge" id="passBadge"></span>
+    <div class="score-big" id="scoreNum"></div>
+    <div class="score-sub" id="scoreSub"></div>
+    <div class="center" style="margin-bottom:8px;" id="resultBtns"></div>
+    <h3 style="margin-top:18px;color:var(--brand-dark);">逐題解析</h3>
+    <div id="reviewList"></div>
+  </div>
+</div>
+
+<script>
+/* ★ 部署 Apps Script 後，把 /exec 網址貼在這裡 ★ */
+var API = 'https://script.google.com/macros/s/AKfycbw9_VbOGapiSPTrPo7nqRo4UkvhEywulkoY-4f_aj1erETANrghR404bgmAvZIFSGvP/exec';
+
+var AUTH = null;            // {empId, name, clinic, attempts}
+var CRED = null;            // {clinic, empId, pwd} 供 API 重複驗證
+var role = null, idx = 0, answers = [], QUESTIONS = [], PASS_SCORE = 80;
+var P = { qs: [], idx: 0, correct: 0, answered: false, results: [] }; // 模擬練習狀態
+var LETTERS = ['A','B','C','D'];
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function p2(n){ return String(n).padStart(2,'0'); }
+function nowStr(){ var n=new Date(); return (n.getFullYear()-1911)+'/'+p2(n.getMonth()+1)+'/'+p2(n.getDate())+' '+p2(n.getHours())+':'+p2(n.getMinutes()); }
+
+function get(params, cb) {
+  var q = Object.keys(params).map(function(k){
+    return encodeURIComponent(k)+'='+encodeURIComponent(params[k]==null?'':params[k]);
+  }).join('&');
+  fetch(API+'?'+q).then(function(r){ return r.json(); }).then(cb).catch(function(err){
+    show('menuCard');
+    if (!AUTH) show('loginCard');
+    alert('連線失敗，請稍後再試：'+err);
+  });
+}
+
+function show(id) {
+  ['loginCard','menuCard','loadingCard','quizCard','pracCard','resultCard'].forEach(function(c){
+    $(c).classList.add('hidden');
+  });
+  $(id).classList.remove('hidden');
+}
+
+/* ===== 登入 ===== */
+function loadClinics(){
+  get({action:'getClinics'}, function(res){
+    var sel = $('clinicSel');
+    if (res.error || !res.clinics) { sel.innerHTML = '<option value="">載入失敗，請重新整理</option>'; return; }
+    var html = '<option value="">請選擇院區</option>';
+    res.clinics.forEach(function(c){ html += '<option value="'+esc(c)+'">'+esc(c)+'</option>'; });
+    sel.innerHTML = html;
+  });
+}
+
+function doLogin(){
+  var clinic = $('clinicSel').value;
+  var empId = $('empId').value.trim();
+  var pwd = $('empPwd').value.trim();
+  $('loginErr').textContent = '';
+  if (!clinic) { $('loginErr').textContent = '請選擇院區'; return; }
+  if (!empId)  { $('loginErr').textContent = '請輸入員工編號'; return; }
+  if (!pwd)    { $('loginErr').textContent = '請輸入密碼'; return; }
+  $('loginBtn').disabled = true;
+  get({action:'login', clinic:clinic, empId:empId, pwd:pwd}, function(res){
+    $('loginBtn').disabled = false;
+    if (res.error) { $('loginErr').textContent = res.error; return; }
+    AUTH = res;
+    CRED = { clinic: clinic, empId: empId, pwd: pwd };
+    renderMenu();
+  });
+}
+
+function renderMenu(){
+  $('whoName').textContent = AUTH.name;
+  $('whoClinic').textContent = AUTH.clinic;
+  $('whoId').textContent = AUTH.empId;
+  markFormal('fmDoctor', AUTH.attempts && AUTH.attempts.doctor);
+  markFormal('fmStaff', AUTH.attempts && AUTH.attempts.staff);
+  show('menuCard');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function markFormal(btnId, rec){
+  var el = $(btnId);
+  var old = el.querySelector('.done-tag');
+  if (old) old.remove();
+  if (rec) {
+    el.classList.add('locked');
+    var tag = document.createElement('span');
+    tag.className = 'done-tag';
+    tag.textContent = '已完成 '+rec.score+' 分';
+    el.appendChild(tag);
+  } else {
+    el.classList.remove('locked');
+  }
+}
+
+function logout(){
+  AUTH = null; CRED = null;
+  $('empPwd').value = '';
+  $('loginErr').textContent = '';
+  show('loginCard');
+}
+
+/* ===== 正式測驗 ===== */
+function startFormal(r){
+  var rec = r==='doctor' ? (AUTH.attempts && AUTH.attempts.doctor) : (AUTH.attempts && AUTH.attempts.staff);
+  if (rec) { alert('您已完成此份正式測驗（'+rec.time+'，'+rec.score+' 分），每帳號限作答一次。可改用「模擬練習」複習。'); return; }
+  if (!confirm('正式測驗每帳號限作答一次，確定要開始「'+(r==='doctor'?'醫師版':'一般人員版')+'」正式測驗嗎？')) return;
+  role = r;
+  $('loadingText').textContent = '考卷載入中…';
+  show('loadingCard');
+  get({action:'getExam', role:r, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
+    if (res.error) { show('menuCard'); alert(res.error); return; }
+    if (!res.questions || !res.questions.length) { show('menuCard'); alert('目前尚無已上架的考題，請聯絡管理者。'); return; }
+    QUESTIONS = res.questions;
+    PASS_SCORE = res.passScore || 80;
+    idx = 0;
+    answers = new Array(QUESTIONS.length).fill(null);
+    $('roleTag').textContent = '正式測驗・'+(r==='doctor' ? '醫師版' : '一般人員版');
+    show('quizCard');
+    renderQ();
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+}
+
+function renderQ() {
+  var q = QUESTIONS[idx], n = QUESTIONS.length;
+  $('qCounter').textContent = '第 '+(idx+1)+' / '+n+' 題';
+  $('pbar').style.width = (answers.filter(function(a){return a!==null;}).length / n * 100) + '%';
+  $('qText').textContent = (idx+1)+'. '+q.q;
+  var opts = [q.oA, q.oB, q.oC, q.oD];
+  var html = '';
+  for (var i = 0; i < 4; i++) {
+    html += '<div class="opt '+(answers[idx]===i?'sel':'')+'" onclick="pick('+i+')"><span class="abc">'+LETTERS[i]+'.</span><span>'+esc(opts[i])+'</span></div>';
+  }
+  $('opts').innerHTML = html;
+  $('prevBtn').disabled = (idx===0);
+  var allDone = answers.every(function(a){return a!==null;});
+  $('nextBtn').classList.toggle('hidden', idx===n-1);
+  $('submitBtn').classList.toggle('hidden', !(idx===n-1 || allDone));
+  var dots = '';
+  for (var d = 0; d < n; d++) {
+    dots += '<div class="dot '+(answers[d]!==null?'done':'')+' '+(d===idx?'cur':'')+'" onclick="jump('+d+')">'+(d+1)+'</div>';
+  }
+  $('dots').innerHTML = dots;
+}
+
+function pick(i) {
+  answers[idx] = i;
+  if (idx < QUESTIONS.length-1) { setTimeout(function(){ idx++; renderQ(); }, 180); }
+  else renderQ();
+}
+function move(d){ idx = Math.max(0, Math.min(QUESTIONS.length-1, idx+d)); renderQ(); }
+function jump(i){ idx = i; renderQ(); }
+
+function submitQuiz() {
+  var un = answers.filter(function(a){return a===null;}).length;
+  if (un > 0) {
+    alert('尚有 '+un+' 題未作答，請完成後再交卷。');
+    idx = answers.findIndex(function(a){return a===null;});
+    renderQ(); return;
+  }
+  if (!confirm('確定交卷嗎？交卷後不可重考。')) return;
+  var qids = QUESTIONS.map(function(q){return q.id;}).join(',');
+  var ans = answers.map(function(a){return LETTERS[a];}).join(',');
+  $('loadingText').textContent = '閱卷中，請稍候…';
+  show('loadingCard');
+  get({action:'submitExam', role:role, qids:qids, answers:ans, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
+    if (res.error) { show('quizCard'); alert(res.error); return; }
+    // 更新本地 attempts，回選單時鎖定
+    if (AUTH && AUTH.attempts) {
+      var rec = { score: res.score, pass: res.pass?'及格':'不及格', time: nowStr() };
+      if (role==='doctor') AUTH.attempts.doctor = rec; else AUTH.attempts.staff = rec;
+    }
+    renderResult(res, false);
+  });
+}
+
+/* ===== 模擬練習（即答即回饋） ===== */
+function startPractice(r){
+  role = r;
+  $('loadingText').textContent = '模擬題組載入中…';
+  show('loadingCard');
+  get({action:'getPractice', role:r, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
+    if (res.error) { show('menuCard'); alert(res.error); return; }
+    P = { qs: res.questions, idx: 0, correct: 0, answered: false, results: [] };
+    PASS_SCORE = res.passScore || 80;
+    $('pRoleTag').textContent = '模擬練習・'+(r==='doctor' ? '醫師版' : '一般人員版');
+    show('pracCard');
+    renderP();
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+}
+
+function renderP(){
+  var q = P.qs[P.idx], n = P.qs.length;
+  P.answered = false;
+  $('pCounter').textContent = '第 '+(P.idx+1)+' / '+n+' 題';
+  $('pScore').textContent = '目前答對 '+P.correct+' 題';
+  $('ppbar').style.width = (P.idx / n * 100) + '%';
+  $('pQText').textContent = (P.idx+1)+'. '+q.q;
+  var opts = [q.oA, q.oB, q.oC, q.oD];
+  var html = '';
+  for (var i = 0; i < 4; i++) {
+    html += '<div class="opt" id="popt-'+i+'" onclick="pPick('+i+')"><span class="abc">'+LETTERS[i]+'.</span><span>'+esc(opts[i])+'</span></div>';
+  }
+  $('pOpts').innerHTML = html;
+  $('pFeedback').innerHTML = '';
+  $('pNextBtn').classList.add('hidden');
+}
+
+function pPick(i){
+  if (P.answered) return;
+  P.answered = true;
+  var q = P.qs[P.idx];
+  var ansIdx = LETTERS.indexOf(q.ans);
+  var ok = i === ansIdx;
+  if (ok) P.correct++;
+  P.results.push({ q:q, your:LETTERS[i], ok:ok });
+  for (var k = 0; k < 4; k++) {
+    var el = $('popt-'+k);
+    el.classList.add('dim');
+    if (k === ansIdx) el.classList.add('right');
+    else if (k === i) el.classList.add('wrong');
+  }
+  $('pScore').textContent = '目前答對 '+P.correct+' 題';
+  $('pFeedback').innerHTML = '<div class="fb '+(ok?'ok':'ng')+'">'
+    + '<b>'+(ok ? '✔ 答對了！' : '✘ 答錯了，正確答案是 '+q.ans+'。')+'</b>'
+    + '<div style="margin-top:4px;">'+esc(q.explain||'')+'</div>'
+    + '<div class="src">📄 出處：'+esc(q.source||'')+'</div>'
+    + '</div>';
+  $('pNextBtn').textContent = (P.idx === P.qs.length-1) ? '看總成績' : '下一題';
+  $('pNextBtn').classList.remove('hidden');
+}
+
+function retryPractice(){ startPractice(role); }
+
+function pNext(){
+  if (P.idx < P.qs.length-1) { P.idx++; renderP(); window.scrollTo({top:0, behavior:'smooth'}); }
+  else renderPracResult();
+}
+
+function renderPracResult(){
+  var total = P.qs.length;
+  var score = total ? Math.round(P.correct / total * 100) : 0;
+  var res = {
+    score: score, correct: P.correct, total: total,
+    pass: score >= PASS_SCORE, passScore: PASS_SCORE,
+    review: P.results.map(function(r){
+      return { q:r.q.q, oA:r.q.oA, oB:r.q.oB, oC:r.q.oC, oD:r.q.oD,
+        your:r.your, ans:r.q.ans, ok:r.ok, explain:r.q.explain, source:r.q.source };
+    })
+  };
+  renderResult(res, true);
+}
+
+/* ===== 成績畫面（正式/模擬共用） ===== */
+function renderResult(res, isPractice) {
+  show('resultCard');
+  if (isPractice) {
+    $('passBadge').textContent = '🎯 模擬練習成績（不列入紀錄）';
+    $('passBadge').className = 'badge practice';
+  } else {
+    $('passBadge').textContent = res.pass ? '✅ 及格' : '❌ 未達及格標準（'+res.passScore+' 分）';
+    $('passBadge').className = 'badge ' + (res.pass ? 'pass' : 'fail');
+  }
+  $('scoreNum').textContent = res.score + ' 分';
+  $('scoreNum').className = 'score-big ' + (res.pass ? 'pass' : 'fail');
+  var info = '受測人：<b>'+esc(AUTH ? AUTH.name : '')+'</b>（'+esc(AUTH ? AUTH.clinic : '')+'・'+esc(AUTH ? AUTH.empId : '')+'）'
+    + '｜'+(role==='doctor'?'醫師版':'一般人員版')
+    + '｜答對 '+res.correct+'/'+res.total+' 題｜'+nowStr()
+    + (isPractice ? '' : '（成績已回報，每帳號限作答一次）');
+  $('scoreSub').innerHTML = info;
+  $('resultBtns').innerHTML = isPractice
+    ? '<button class="btn btn-blue" onclick="retryPractice()">🔄 再練一組（重新隨機抽題）</button> <button class="btn btn-ghost" onclick="renderMenu()">回選單</button>'
+    : '<button class="btn btn-primary" onclick="renderMenu()">回選單</button>';
+  var html = '';
+  res.review.forEach(function(r, i){
+    var opts = {A:r.oA, B:r.oB, C:r.oC, D:r.oD};
+    html += '<div class="review-q '+(r.ok?'ok':'ng')+'">'
+      + '<span class="tag '+(r.ok?'ok':'ng')+'">'+(r.ok?'✔ 答對':'✘ 答錯')+'</span>'
+      + '<h4>'+(i+1)+'. '+esc(r.q)+'</h4>'
+      + '<p>您的作答：'+r.your+'. '+esc(opts[r.your]||'')+'</p>'
+      + (r.ok ? '' : '<p><b>正確答案：'+r.ans+'. '+esc(opts[r.ans]||'')+'</b></p>')
+      + '<p>'+esc(r.explain||'')+'</p>'
+      + '<p class="src">📄 出處：'+esc(r.source||'')+'</p>'
+      + '</div>';
+  });
+  $('reviewList').innerHTML = html;
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+document.addEventListener('keydown', function(ev){
+  if (ev.key === 'Enter' && !$('loginCard').classList.contains('hidden')) doLogin();
+});
+loadClinics();
+</script>
+</body>
+</html>

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>金鶯考題系統 後台管理</title>
+<style>
+  :root{
+    --brand:#0f6b5f; --brand-dark:#0a4a42; --brand-light:#e6f2f0;
+    --gold:#c9962e; --bg:#f4f6f5; --card:#fff; --ink:#1f2a28; --muted:#6b7a77;
+    --good:#1d8a4e; --bad:#c0392b; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6;}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px;}
+  header.top{background:linear-gradient(135deg,#233,#456);color:#fff;padding:20px 16px;text-align:center;}
+  header.top h1{font-size:1.3rem;letter-spacing:.06em;}
+  header.top p{opacity:.8;font-size:.85rem;margin-top:4px;}
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:0 2px 10px rgba(15,60,54,.08);padding:20px;margin-top:16px;}
+  .hidden{display:none !important;}
+  input,select,textarea{font-family:inherit;font-size:.92rem;padding:8px 10px;border:1.5px solid #d5dedc;border-radius:8px;width:100%;}
+  textarea{resize:vertical;min-height:56px;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);}
+  button.btn{border:none;border-radius:9px;padding:9px 18px;font-size:.9rem;font-weight:600;cursor:pointer;margin-right:6px;}
+  .btn-primary{background:var(--brand);color:#fff;}
+  .btn-gold{background:var(--gold);color:#fff;}
+  .btn-ghost{background:#eef2f1;color:var(--ink);}
+  .btn-ok{background:var(--good);color:#fff;}
+  .btn-bad{background:var(--bad);color:#fff;}
+  .tabs{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+  .tab{padding:9px 18px;border-radius:999px;background:#e2e9e7;cursor:pointer;font-size:.9rem;font-weight:600;color:var(--muted);}
+  .tab.on{background:var(--brand);color:#fff;}
+  .statbar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;}
+  @media(max-width:640px){.statbar{grid-template-columns:repeat(2,1fr);}}
+  .stat{background:var(--brand-light);border-radius:10px;padding:12px;text-align:center;}
+  .stat b{font-size:1.4rem;color:var(--brand-dark);display:block;}
+  .stat span{font-size:.78rem;color:var(--muted);}
+  .qcard{border:1.5px solid #e2e9e7;border-radius:12px;padding:14px;margin-top:14px;}
+  .qcard .meta{display:flex;gap:8px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);margin-bottom:8px;align-items:center;}
+  .chip{background:#eef2f1;border-radius:999px;padding:2px 10px;font-weight:600;}
+  .chip.doctor{background:#e3ecfb;color:#1d4e89;}
+  .chip.staff{background:#fdf3e0;color:#8a6210;}
+  .chip.draft{background:#fff3cd;color:#8a6d1a;}
+  .chip.approved{background:#e3f5ea;color:var(--good);}
+  .chip.rejected{background:#fdecea;color:var(--bad);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+  @media(max-width:640px){.row2{grid-template-columns:1fr;}}
+  .fld{margin-top:8px;}
+  .fld label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:3px;}
+  .actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:.88rem;}
+  th,td{padding:8px 10px;border-bottom:1px solid #e6ebea;text-align:left;}
+  th{background:var(--brand-light);color:var(--brand-dark);}
+  .pass{color:var(--good);font-weight:700;} .fail{color:var(--bad);font-weight:700;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#233;color:#fff;padding:10px 22px;border-radius:999px;font-size:.9rem;opacity:0;transition:.3s;pointer-events:none;z-index:99;}
+  .toast.show{opacity:1;}
+  .toast.err{background:var(--bad);}
+  .empty{text-align:center;color:var(--muted);padding:30px 0;}
+  .loading{text-align:center;padding:30px 0;color:var(--muted);}
+  .note{font-size:.8rem;color:var(--muted);margin-top:8px;}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>🛠 金鶯考題系統 後台管理</h1>
+  <p>匯入草稿 → 審核題目 → 上架後前台才會出題</p>
+</header>
+<div class="wrap">
+
+  <div id="loginCard" class="card">
+    <h3 style="color:var(--brand-dark);margin-bottom:10px;">管理者登入</h3>
+    <input type="password" id="adminKey" placeholder="請輸入管理密鑰">
+    <div style="margin-top:12px;"><button class="btn btn-primary" onclick="login()">登入</button></div>
+    <p class="note">密鑰儲存於試算表「設定」工作表 adminKey，可自行修改。</p>
+  </div>
+
+  <div id="mainArea" class="hidden">
+    <div class="card">
+      <button class="btn btn-gold" onclick="doImport()">🔄 匯入草稿區新題目</button>
+      <button class="btn btn-ghost" onclick="refreshAll()">重新整理</button>
+      <div class="statbar" id="statbar"></div>
+      <p class="note">草稿區為 Google Drive「金鶯考題系統-草稿區」資料夾；Claude 產生的草稿 JSON 放入後，按「匯入」即進入待審清單。</p>
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" id="tab-draft" onclick="switchTab('draft')">📝 待審核</div>
+      <div class="tab" id="tab-approved" onclick="switchTab('approved')">✅ 已上架</div>
+      <div class="tab" id="tab-rejected" onclick="switchTab('rejected')">🗑 已退回</div>
+      <div class="tab" id="tab-scores" onclick="switchTab('scores')">📊 成績紀錄</div>
+    </div>
+
+    <div id="listArea" class="card"><div class="empty">載入中…</div></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ★ 部署 Apps Script 後，把 /exec 網址貼在這裡（與 index.html 相同） ★ */
+var API = 'https://script.google.com/macros/s/AKfycbw9_VbOGapiSPTrPo7nqRo4UkvhEywulkoY-4f_aj1erETANrghR404bgmAvZIFSGvP/exec';
+
+var KEY = '';
+var _qRecs = [];
+var curTab = 'draft';
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function toast(msg, type){
+  var t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type==='err' ? ' err' : '');
+  setTimeout(function(){ t.className = 'toast'; }, 2600);
+}
+function get(params, cb){
+  params.key = KEY;
+  var q = Object.keys(params).map(function(k){
+    return encodeURIComponent(k)+'='+encodeURIComponent(params[k]==null?'':params[k]);
+  }).join('&');
+  fetch(API+'?'+q).then(function(r){ return r.json(); }).then(cb).catch(function(err){
+    toast('連線失敗：'+err, 'err');
+  });
+}
+
+function login(){
+  KEY = $('adminKey').value.trim();
+  if (!KEY) { toast('請輸入管理密鑰','err'); return; }
+  get({action:'stats'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    $('loginCard').classList.add('hidden');
+    $('mainArea').classList.remove('hidden');
+    renderStats(res);
+    loadList('draft');
+  });
+}
+
+function renderStats(s){
+  $('statbar').innerHTML =
+    '<div class="stat"><b>'+s.doctor.draft+'</b><span>醫師版 待審</span></div>'
+    +'<div class="stat"><b>'+s.doctor.approved+'</b><span>醫師版 已上架</span></div>'
+    +'<div class="stat"><b>'+s.staff.draft+'</b><span>一般版 待審</span></div>'
+    +'<div class="stat"><b>'+s.staff.approved+'</b><span>一般版 已上架</span></div>';
+}
+
+function refreshAll(){
+  get({action:'stats'}, function(res){ if(!res.error) renderStats(res); });
+  switchTab(curTab);
+}
+
+function switchTab(tab){
+  curTab = tab;
+  ['draft','approved','rejected','scores'].forEach(function(t){
+    $('tab-'+t).className = 'tab' + (t===tab ? ' on' : '');
+  });
+  if (tab === 'scores') loadScores();
+  else loadList(tab);
+}
+
+function loadList(status){
+  $('listArea').innerHTML = '<div class="loading">載入中…</div>';
+  get({action:'listQ', status:status}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    renderList(res.questions || [], status);
+  });
+}
+
+function renderList(list, status){
+  _qRecs = [];
+  if (!list.length) {
+    $('listArea').innerHTML = '<div class="empty">目前沒有'+(status==='draft'?'待審核':status==='approved'?'已上架':'已退回')+'的題目</div>';
+    return;
+  }
+  var html = '<p class="note">共 '+list.length+' 題（依來源檔案上傳日期 新→舊 排序，前台考卷以最新文件題目優先出題）</p>';
+  list.forEach(function(q){
+    var idx = _qRecs.length;
+    _qRecs.push(q);
+    html += '<div class="qcard" id="qc-'+idx+'">'
+      + '<div class="meta">'
+      + '<span class="chip '+q.role+'">'+(q.role==='doctor'?'醫師版':'一般版')+'</span>'
+      + '<span class="chip '+q.status+'">'+(q.status==='draft'?'待審':q.status==='approved'?'已上架':'已退回')+'</span>'
+      + '<span>📄 '+esc(q.fileName||'')+'（'+esc(q.fileDate||'')+'）</span>'
+      + '</div>'
+      + '<div class="fld"><label>題目</label><textarea id="q-q-'+idx+'">'+esc(q.q)+'</textarea></div>'
+      + '<div class="row2">'
+      + '<div class="fld"><label>選項 A</label><input id="q-oA-'+idx+'" value="'+esc(q.oA)+'"></div>'
+      + '<div class="fld"><label>選項 B</label><input id="q-oB-'+idx+'" value="'+esc(q.oB)+'"></div>'
+      + '<div class="fld"><label>選項 C</label><input id="q-oC-'+idx+'" value="'+esc(q.oC)+'"></div>'
+      + '<div class="fld"><label>選項 D</label><input id="q-oD-'+idx+'" value="'+esc(q.oD)+'"></div>'
+      + '</div>'
+      + '<div class="row2">'
+      + '<div class="fld"><label>正確答案</label><select id="q-ans-'+idx+'">'+ansOpts(q.ans)+'</select></div>'
+      + '<div class="fld"><label>身分別</label><select id="q-role-'+idx+'">'
+      + '<option value="doctor"'+(q.role==='doctor'?' selected':'')+'>醫師版</option>'
+      + '<option value="staff"'+(q.role==='staff'?' selected':'')+'>一般人員版</option>'
+      + '</select></div>'
+      + '</div>'
+      + '<div class="fld"><label>解析</label><textarea id="q-explain-'+idx+'">'+esc(q.explain||'')+'</textarea></div>'
+      + '<div class="fld"><label>出處</label><input id="q-source-'+idx+'" value="'+esc(q.source||'')+'"></div>'
+      + '<div class="actions">'
+      + (q.status!=='approved' ? '<button class="btn btn-ok" onclick="saveAnd(\'approved\','+idx+')">✅ 核准上架</button>' : '')
+      + (q.status==='approved' ? '<button class="btn btn-ghost" onclick="saveAnd(\'draft\','+idx+')">⬇ 下架（退回待審）</button>' : '')
+      + (q.status!=='rejected' ? '<button class="btn btn-bad" onclick="setSt(\'rejected\','+idx+')">🗑 退回不用</button>' : '<button class="btn btn-ghost" onclick="setSt(\'draft\','+idx+')">♻ 還原為待審</button>')
+      + '<button class="btn btn-primary" onclick="saveQ('+idx+')">💾 儲存修改</button>'
+      + '</div>'
+      + '</div>';
+  });
+  $('listArea').innerHTML = html;
+}
+
+function ansOpts(sel){
+  return ['A','B','C','D'].map(function(x){
+    return '<option value="'+x+'"'+(x===sel?' selected':'')+'>'+x+'</option>';
+  }).join('');
+}
+
+function collect(idx){
+  return {
+    q: $('q-q-'+idx).value.trim(),
+    oA: $('q-oA-'+idx).value.trim(),
+    oB: $('q-oB-'+idx).value.trim(),
+    oC: $('q-oC-'+idx).value.trim(),
+    oD: $('q-oD-'+idx).value.trim(),
+    ans: $('q-ans-'+idx).value,
+    role: $('q-role-'+idx).value,
+    explain: $('q-explain-'+idx).value.trim(),
+    source: $('q-source-'+idx).value.trim()
+  };
+}
+
+function saveQ(idx, cb){
+  var r = _qRecs[idx];
+  if (!r) { toast('找不到題目，請重新整理','err'); return; }
+  var d = collect(idx);
+  d.action = 'updateQ'; d.id = r.id;
+  get(d, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    if (cb) cb(); else toast('已儲存修改');
+  });
+}
+
+function setSt(status, idx){
+  var r = _qRecs[idx];
+  if (!r) { toast('找不到題目，請重新整理','err'); return; }
+  get({action:'setStatus', id:r.id, status:status}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast(status==='approved' ? '已上架' : status==='rejected' ? '已退回' : '已改為待審');
+    refreshAll();
+  });
+}
+
+function saveAnd(status, idx){
+  saveQ(idx, function(){ setSt(status, idx); });
+}
+
+function doImport(){
+  toast('匯入中，請稍候…');
+  get({action:'importDrafts'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    if (res.files === 0) { toast('草稿區沒有新的草稿檔'); return; }
+    toast('已匯入 '+res.files+' 個檔案、共 '+res.items+' 題，請至「待審核」審題');
+    refreshAll();
+  });
+}
+
+function loadScores(){
+  $('listArea').innerHTML = '<div class="loading">載入中…</div>';
+  get({action:'listScores'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    var rows = res.scores || [];
+    if (!rows.length) { $('listArea').innerHTML = '<div class="empty">尚無成績紀錄</div>'; return; }
+    var html = '<table><tr><th>時間</th><th>員工編號</th><th>姓名</th><th>院區</th><th>身分別</th><th>分數</th><th>答對</th><th>結果</th></tr>';
+    rows.forEach(function(r){
+      html += '<tr><td>'+esc(r.time)+'</td><td>'+esc(r.empId||'')+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.clinic||'')+'</td><td>'+esc(r.role)+'</td><td>'+r.score+'</td><td>'+r.correct+'/'+r.total+'</td><td class="'+(r.pass==='及格'?'pass':'fail')+'">'+esc(r.pass)+'</td></tr>';
+    });
+    html += '</table>';
+    $('listArea').innerHTML = html;
+  });
+}
+
+document.addEventListener('keydown', function(ev){
+  if (ev.key === 'Enter' && !$('loginCard').classList.contains('hidden') && document.activeElement === $('adminKey')) login();
+});
+</script>
+</body>
+</html>
