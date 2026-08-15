@@ -91,6 +91,7 @@
   <div id="mainArea" class="hidden">
     <div class="card">
       <button class="btn btn-gold" onclick="doImport()">🔄 匯入草稿區新題目</button>
+      <button class="btn btn-primary" onclick="quickRandom()">🎲 更換隨機題目</button>
       <button class="btn btn-ghost" onclick="refreshAll()">重新整理</button>
       <div class="statbar" id="statbar"></div>
       <p class="note">草稿區為 Google Drive「金鶯考題系統-草稿區」資料夾；Claude 產生的草稿 JSON 放入後，按「匯入」即進入待審清單。</p>
@@ -382,7 +383,7 @@ function doRemoveAdmin(i){
   });
 }
 
-var _fullList = [], _listStatus = 'draft', _roleFilter = '', _sample = null;
+var _fullList = [], _listStatus = 'draft', _roleFilter = '', _sample = null, _rollAfterLoad = false;
 
 function loadList(status){
   _listStatus = status;
@@ -392,7 +393,19 @@ function loadList(status){
     if (res.error) { toast(res.error,'err'); return; }
     _fullList = res.questions || [];
     renderListView();
+    if (_rollAfterLoad) { _rollAfterLoad = false; rollSample(); }
   });
+}
+
+/* 頂部「更換隨機題目」：每按一次抽一批新的隨機題目呈現在下方 */
+function quickRandom(){
+  if (['draft','approved','rejected'].indexOf(curTab) >= 0 && _fullList.length) {
+    rollSample();
+  } else {
+    _rollAfterLoad = true;
+    switchTab('draft', true); // 預設抽「待審核」題目；保留目前身分別篩選
+  }
+  window.scrollTo({top: $('listArea').offsetTop - 20, behavior:'smooth'});
 }
 
 function filteredList_(){
