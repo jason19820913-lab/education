@@ -94,7 +94,8 @@
       <button class="btn btn-primary" onclick="quickRandom()">🎲 更換隨機題目</button>
       <button class="btn btn-ghost" onclick="refreshAll()">重新整理</button>
       <div class="statbar" id="statbar"></div>
-      <p class="note">草稿區為 Google Drive「金鶯考題系統-草稿區」資料夾；Claude 產生的草稿 JSON 放入後，按「匯入」即進入待審清單。</p>
+      <p class="note" id="reserveInfo" style="margin-top:10px;"></p>
+      <p class="note">草稿區為 Google Drive「金鶯考題系統-草稿區」資料夾；Claude 產生的草稿 JSON 匯入後先進「備用題庫」，系統會自動讓待審池維持 30 題（核准或退回一題就自動補一題）。</p>
       <div style="border-top:1px solid #e6ebea;margin-top:14px;padding-top:12px;">
         <b style="font-size:.92rem;color:var(--brand-dark);">📐 出卷設定</b>
         <div class="row2" style="align-items:end;margin-top:4px;">
@@ -185,6 +186,11 @@ function renderStats(s){
     +'<div class="stat clickable" onclick="filterFromCard(\'doctor\',\'approved\')" title="點我列出題目"><b>'+s.doctor.approved+'</b><span>醫師版 已上架</span></div>'
     +'<div class="stat clickable" onclick="filterFromCard(\'staff\',\'draft\')" title="點我列出題目"><b>'+s.staff.draft+'</b><span>一般版 待審</span></div>'
     +'<div class="stat clickable" onclick="filterFromCard(\'staff\',\'approved\')" title="點我列出題目"><b>'+s.staff.approved+'</b><span>一般版 已上架</span></div>';
+  var dR = (s.doctor.reserve !== undefined) ? s.doctor.reserve : '—';
+  var sR = (s.staff.reserve !== undefined) ? s.staff.reserve : '—';
+  var low = (Number(dR) < 10 || Number(sR) < 10);
+  $('reserveInfo').innerHTML = '📦 備用題庫存量：醫師版 <b>'+dR+'</b> 題／一般版 <b>'+sR+'</b> 題'
+    + (low ? '　<span style="color:var(--bad);font-weight:700;">備用題庫偏低，請向 Claude 說「更新題庫」補充新題</span>' : '');
   if (s.examSizeDoctor !== undefined) $('setDocSize').value = s.examSizeDoctor;
   if (s.examSizeStaff !== undefined) $('setStaffSize').value = s.examSizeStaff;
   if (s.passScore !== undefined) $('setPass').value = s.passScore;
@@ -442,15 +448,19 @@ function loadList(status){
   });
 }
 
-/* 頂部「更換隨機題目」：每按一次抽一批新的隨機題目呈現在下方 */
+/* 頂部「更換隨機題目」：把待審池整批退回備用題庫、重新隨機補滿 30 題
+ * （抽樣含剛退回的題目，可能有少數重複，但絕大多數會是新題） */
 function quickRandom(){
-  if (['draft','approved','rejected'].indexOf(curTab) >= 0 && _fullList.length) {
-    rollSample();
-  } else {
-    _rollAfterLoad = true;
-    switchTab('draft', true); // 預設抽「待審核」題目；保留目前身分別篩選
-  }
-  window.scrollTo({top: $('listArea').offsetTop - 20, behavior:'smooth'});
+  var roleTxt = _roleFilter==='doctor' ? '醫師版' : _roleFilter==='staff' ? '一般版' : '醫師版＋一般版';
+  if (!confirm('要把「'+roleTxt+'」的待審題目整批換新嗎？目前待審中的題目會退回備用題庫，並隨機補上新的一批。')) return;
+  toast('更換中，請稍候…');
+  get({action:'shuffleDrafts', role:_roleFilter}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('待審題目已整批更換');
+    get({action:'stats'}, function(s){ if(!s.error) renderStats(s); });
+    switchTab('draft', true);
+    window.scrollTo({top: $('listArea').offsetTop - 20, behavior:'smooth'});
+  });
 }
 
 function filteredList_(){
