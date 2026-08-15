@@ -91,7 +91,8 @@
   <div id="mainArea" class="hidden">
     <div class="card">
       <button class="btn btn-gold" onclick="doImport()">🔄 匯入草稿區新題目</button>
-      <button class="btn btn-primary" onclick="quickRandom()">🎲 更換隨機題目</button>
+      <button class="btn btn-primary" onclick="quickRandom()">🎲 更新隨機題目（AI 重新出題）</button>
+      <button class="btn btn-ghost" onclick="doSyncDocs()">📚 同步文件庫</button>
       <button class="btn btn-ghost" onclick="refreshAll()">重新整理</button>
       <div class="statbar" id="statbar"></div>
       <p class="note" id="reserveInfo" style="margin-top:10px;"></p>
@@ -448,18 +449,36 @@ function loadList(status){
   });
 }
 
-/* 頂部「更換隨機題目」：把待審池整批退回備用題庫、重新隨機補滿 30 題
- * （抽樣含剛退回的題目，可能有少數重複，但絕大多數會是新題） */
+/* 頂部「更新隨機題目」（v8）：重新讀取資料庫文件、AI 現場出全新一批待審題。
+ * 舊待審整批退回備用池；未設 Gemini 金鑰或 AI 失敗時自動改用備用題庫換新。 */
 function quickRandom(){
   var roleTxt = _roleFilter==='doctor' ? '醫師版' : _roleFilter==='staff' ? '一般版' : '醫師版＋一般版';
-  if (!confirm('要把「'+roleTxt+'」的待審題目整批換新嗎？目前待審中的題目會退回備用題庫，並隨機補上新的一批。')) return;
-  toast('更換中，請稍候…');
-  get({action:'shuffleDrafts', role:_roleFilter}, function(res){
+  if (!confirm('要重新出「'+roleTxt+'」的待審題目嗎？系統將重新讀取資料庫文件、由 AI 現場出全新一批題目（約需 30~60 秒），目前待審題目會退回備用題庫。')) return;
+  toast('AI 正在重新讀取文件出題，約需 30~60 秒，請勿離開…');
+  get({action:'regenDrafts', role:_roleFilter}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
-    toast('待審題目已整批更換');
+    var msgs = [];
+    ['doctor','staff'].forEach(function(r){
+      if (!res.results || !res.results[r]) return;
+      var label = r==='doctor'?'醫師版':'一般版';
+      if (res.results[r].mode==='gemini') msgs.push(label+'：AI 新出 '+res.results[r].added+' 題');
+      else msgs.push(label+'：改用備用題庫換新（AI 未啟用或失敗）');
+    });
+    if (res.sync && res.sync.pending > 0) msgs.push('另有 '+res.sync.pending+' 份文件待同步，請按「📚 同步文件庫」');
+    toast(msgs.join('；'));
     get({action:'stats'}, function(s){ if(!s.error) renderStats(s); });
     switchTab('draft', true);
     window.scrollTo({top: $('listArea').offsetTop - 20, behavior:'smooth'});
+  });
+}
+
+/* 文件庫同步：首次使用請連按到「待同步 0 份」為止 */
+function doSyncDocs(){
+  toast('文件同步中（PDF 轉文字），請稍候…');
+  get({action:'syncDocs'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    if (res.synced === 0 && res.pending === 0) toast('文件庫已是最新，無新文件');
+    else toast('本次同步 '+res.synced+' 份文件'+(res.pending>0 ? '，尚有 '+res.pending+' 份待同步，請再按一次' : '，全部完成'));
   });
 }
 
