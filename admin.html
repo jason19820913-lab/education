@@ -89,12 +89,25 @@
       <button class="btn btn-ghost" onclick="refreshAll()">重新整理</button>
       <div class="statbar" id="statbar"></div>
       <p class="note">草稿區為 Google Drive「金鶯考題系統-草稿區」資料夾；Claude 產生的草稿 JSON 放入後，按「匯入」即進入待審清單。</p>
+      <div style="border-top:1px solid #e6ebea;margin-top:14px;padding-top:12px;">
+        <b style="font-size:.92rem;color:var(--brand-dark);">📐 出卷設定</b>
+        <div class="row2" style="align-items:end;margin-top:4px;">
+          <div class="fld"><label>醫師版正式卷題數</label><input type="number" id="setDocSize" min="1" max="100"></div>
+          <div class="fld"><label>一般版正式卷題數</label><input type="number" id="setStaffSize" min="1" max="100"></div>
+        </div>
+        <div class="row2" style="align-items:end;">
+          <div class="fld"><label>及格分數</label><input type="number" id="setPass" min="0" max="100"></div>
+          <div class="fld"><button class="btn btn-primary" onclick="saveSettings()" style="margin-top:18px;">💾 儲存出卷設定</button></div>
+        </div>
+        <p class="note">正式卷出題方式：依來源檔案上傳日期 新→舊 排序後，「輪流」從每份文件各抽一題直到滿額——各文件平均涵蓋、新文件優先，不會整卷集中在同一份檔案。模擬練習則由員工自選題數、全題庫隨機。</p>
+      </div>
     </div>
 
     <div class="tabs">
       <div class="tab on" id="tab-draft" onclick="switchTab('draft')">📝 待審核</div>
       <div class="tab" id="tab-approved" onclick="switchTab('approved')">✅ 已上架</div>
       <div class="tab" id="tab-rejected" onclick="switchTab('rejected')">🗑 已退回</div>
+      <div class="tab" id="tab-papers" onclick="switchTab('papers')">🗂 考卷管理</div>
       <div class="tab" id="tab-scores" onclick="switchTab('scores')">📊 成績紀錄</div>
       <div class="tab" id="tab-admins" onclick="switchTab('admins')">👥 管理者白名單</div>
     </div>
@@ -165,6 +178,17 @@ function renderStats(s){
     +'<div class="stat"><b>'+s.doctor.approved+'</b><span>醫師版 已上架</span></div>'
     +'<div class="stat"><b>'+s.staff.draft+'</b><span>一般版 待審</span></div>'
     +'<div class="stat"><b>'+s.staff.approved+'</b><span>一般版 已上架</span></div>';
+  if (s.examSizeDoctor !== undefined) $('setDocSize').value = s.examSizeDoctor;
+  if (s.examSizeStaff !== undefined) $('setStaffSize').value = s.examSizeStaff;
+  if (s.passScore !== undefined) $('setPass').value = s.passScore;
+}
+
+function saveSettings(){
+  var d = $('setDocSize').value, s = $('setStaffSize').value, ps = $('setPass').value;
+  get({action:'updateSettings', examSizeDoctor:d, examSizeStaff:s, passScore:ps}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('出卷設定已儲存（醫師 '+res.examSizeDoctor+' 題／一般 '+res.examSizeStaff+' 題／及格 '+res.passScore+' 分）');
+  });
 }
 
 function refreshAll(){
@@ -174,12 +198,128 @@ function refreshAll(){
 
 function switchTab(tab){
   curTab = tab;
-  ['draft','approved','rejected','scores','admins'].forEach(function(t){
+  ['draft','approved','rejected','papers','scores','admins'].forEach(function(t){
     $('tab-'+t).className = 'tab' + (t===tab ? ' on' : '');
   });
   if (tab === 'scores') loadScores();
   else if (tab === 'admins') loadAdmins();
+  else if (tab === 'papers') loadPapers();
   else loadList(tab);
+}
+
+/* ===== 考卷管理 ===== */
+var _papers = [];
+var _pickPool = []; // 目前身分別的已上架題目
+function loadPapers(){
+  $('listArea').innerHTML = '<div class="loading">載入中…</div>';
+  get({action:'listPapersAdmin'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    _papers = res.papers || [];
+    var html = '<h3 style="color:var(--brand-dark);">既有考卷</h3>';
+    if (!_papers.length) {
+      html += '<div class="empty">尚未建立任何考卷</div>';
+    } else {
+      html += '<table><tr><th>卷號</th><th>卷名</th><th>身分別</th><th>題數</th><th>開放期間</th><th>狀態</th><th>作答數</th><th>平均分</th><th>及格率</th><th></th></tr>';
+      _papers.forEach(function(pp, i){
+        var period = (pp.start||'即日')+' ~ '+(pp.end||'不限');
+        var st = pp.status==='disabled' ? '<span class="chip rejected">已停用</span>'
+          : (pp.open ? '<span class="chip approved">開放中</span>' : '<span class="chip draft">未在期間</span>');
+        html += '<tr><td><b>'+esc(pp.paperNo)+'</b></td><td>'+esc(pp.name)+'</td>'
+          + '<td>'+(pp.role==='doctor'?'醫師版':'一般版')+'</td><td>'+pp.count+'</td>'
+          + '<td>'+esc(period)+'</td><td>'+st+'</td>'
+          + '<td>'+pp.takers+'</td><td>'+(pp.avgScore===''?'—':pp.avgScore)+'</td><td>'+(pp.passRate===''?'—':pp.passRate+'%')+'</td>'
+          + '<td>'+(pp.status==='disabled'
+              ? '<button class="btn btn-ok" onclick="togglePaper('+i+',\'enabled\')">啟用</button>'
+              : '<button class="btn btn-bad" onclick="togglePaper('+i+',\'disabled\')">停用</button>')+'</td></tr>';
+      });
+      html += '</table>';
+    }
+    html += '<hr style="margin:18px 0;border:none;border-top:1px solid #e6ebea;">'
+      + '<h3 style="color:var(--brand-dark);">➕ 建立新考卷</h3>'
+      + '<div class="row2">'
+      + '<div class="fld"><label>考卷名稱</label><input id="npName" placeholder="例：115年9月 醫師月考"></div>'
+      + '<div class="fld"><label>身分別</label><select id="npRole" onchange="loadPickPool()">'
+      + '<option value="doctor">醫師版</option><option value="staff">一般人員版</option></select></div>'
+      + '</div>'
+      + '<div class="row2">'
+      + '<div class="fld"><label>開放日（留空＝立即開放）</label><input type="date" id="npStart"></div>'
+      + '<div class="fld"><label>截止日（留空＝不限）</label><input type="date" id="npEnd"></div>'
+      + '</div>'
+      + '<div class="row2" style="align-items:end;">'
+      + '<div class="fld"><label>隨機選題數</label><input type="number" id="npRandN" value="20" min="1" max="100"></div>'
+      + '<div class="fld"><button class="btn btn-gold" onclick="randomPick()" style="margin-top:18px;">🎲 隨機選題</button>'
+      + '<button class="btn btn-ghost" onclick="clearPick()" style="margin-top:18px;">清除勾選</button></div>'
+      + '</div>'
+      + '<p class="note">下方列出該身分別「已上架」題目（依來源檔案 新→舊），可手動勾選、或按「🎲 隨機選題」自動勾選；已勾 <b id="pickCount">0</b> 題。</p>'
+      + '<div id="pickList" style="max-height:420px;overflow-y:auto;border:1.5px solid #e2e9e7;border-radius:10px;padding:10px;margin-top:8px;"></div>'
+      + '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="doCreatePaper()">📋 建立考卷</button></div>';
+    $('listArea').innerHTML = html;
+    loadPickPool();
+  });
+}
+
+function loadPickPool(){
+  var role = $('npRole').value;
+  $('pickList').innerHTML = '<div class="loading">題目載入中…</div>';
+  get({action:'listQ', status:'approved'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    _pickPool = (res.questions || []).filter(function(q){ return q.role === role; });
+    if (!_pickPool.length) { $('pickList').innerHTML = '<div class="empty">此身分別尚無已上架題目，請先至「待審核」核准題目</div>'; updatePickCount(); return; }
+    var html = '';
+    var lastFile = '';
+    _pickPool.forEach(function(q, i){
+      var fkey = (q.fileName||'')+'（'+(q.fileDate||'')+'）';
+      if (fkey !== lastFile) { html += '<div style="font-size:.78rem;font-weight:700;color:var(--muted);margin:10px 0 4px;">📄 '+esc(fkey)+'</div>'; lastFile = fkey; }
+      html += '<label style="display:flex;gap:8px;align-items:flex-start;font-size:.88rem;padding:4px 2px;cursor:pointer;">'
+        + '<input type="checkbox" class="pickbox" data-i="'+i+'" onchange="updatePickCount()" style="width:auto;margin-top:4px;">'
+        + '<span>'+esc(q.q)+' <span style="color:var(--muted);">（答案 '+esc(q.ans)+'）</span></span></label>';
+    });
+    $('pickList').innerHTML = html;
+    updatePickCount();
+  });
+}
+
+function pickBoxes(){ return Array.prototype.slice.call(document.querySelectorAll('.pickbox')); }
+function updatePickCount(){
+  var n = pickBoxes().filter(function(b){ return b.checked; }).length;
+  var el = $('pickCount'); if (el) el.textContent = n;
+}
+function clearPick(){ pickBoxes().forEach(function(b){ b.checked = false; }); updatePickCount(); }
+function randomPick(){
+  var n = Number($('npRandN').value) || 20;
+  var boxes = pickBoxes();
+  if (!boxes.length) { toast('沒有可選題目','err'); return; }
+  if (n > boxes.length) n = boxes.length;
+  boxes.forEach(function(b){ b.checked = false; });
+  var idxs = boxes.map(function(_, i){ return i; });
+  for (var i = idxs.length - 1; i > 0; i--) { var j = Math.floor(Math.random()*(i+1)); var t = idxs[i]; idxs[i]=idxs[j]; idxs[j]=t; }
+  idxs.slice(0, n).forEach(function(i){ boxes[i].checked = true; });
+  updatePickCount();
+  toast('已隨機勾選 '+n+' 題，可再手動調整');
+}
+
+function doCreatePaper(){
+  var name = $('npName').value.trim();
+  if (!name) { toast('請輸入考卷名稱','err'); return; }
+  var qids = [];
+  pickBoxes().forEach(function(b){ if (b.checked) { var q = _pickPool[Number(b.getAttribute('data-i'))]; if (q) qids.push(q.id); } });
+  if (!qids.length) { toast('請至少勾選一題（或按隨機選題）','err'); return; }
+  get({action:'createPaper', name:name, role:$('npRole').value, qids:qids.join(','), start:$('npStart').value, end:$('npEnd').value}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('已建立考卷 '+res.paperNo+'「'+res.name+'」共 '+res.count+' 題');
+    loadPapers();
+  });
+}
+
+function togglePaper(i, status){
+  var pp = _papers[i];
+  if (!pp) { toast('請重新整理','err'); return; }
+  if (status==='disabled' && !confirm('確定停用考卷 '+pp.paperNo+'「'+pp.name+'」？停用後前台立即看不到此卷。')) return;
+  get({action:'setPaperStatus', paperNo:pp.paperNo, status:status}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast(status==='enabled'?'已啟用':'已停用');
+    loadPapers();
+  });
 }
 
 /* ===== 管理者白名單 ===== */
@@ -336,19 +476,42 @@ function doImport(){
   });
 }
 
+var _scoreRows = [];
 function loadScores(){
   $('listArea').innerHTML = '<div class="loading">載入中…</div>';
   get({action:'listScores'}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
-    var rows = res.scores || [];
-    if (!rows.length) { $('listArea').innerHTML = '<div class="empty">尚無成績紀錄</div>'; return; }
-    var html = '<table><tr><th>時間</th><th>員工編號</th><th>姓名</th><th>院區</th><th>身分別</th><th>分數</th><th>答對</th><th>結果</th></tr>';
-    rows.forEach(function(r){
-      html += '<tr><td>'+esc(r.time)+'</td><td>'+esc(r.empId||'')+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.clinic||'')+'</td><td>'+esc(r.role)+'</td><td>'+r.score+'</td><td>'+r.correct+'/'+r.total+'</td><td class="'+(r.pass==='及格'?'pass':'fail')+'">'+esc(r.pass)+'</td></tr>';
-    });
-    html += '</table>';
-    $('listArea').innerHTML = html;
+    _scoreRows = res.scores || [];
+    if (!_scoreRows.length) { $('listArea').innerHTML = '<div class="empty">尚無成績紀錄</div>'; return; }
+    var papers = {};
+    _scoreRows.forEach(function(r){ if (r.paperNo) papers[r.paperNo] = r.paperName || ''; });
+    var opts = '<option value="">全部考卷</option>';
+    Object.keys(papers).sort().forEach(function(no){ opts += '<option value="'+esc(no)+'">'+esc(no)+' '+esc(papers[no])+'</option>'; });
+    $('listArea').innerHTML =
+      '<div class="fld" style="max-width:340px;"><label>依考卷篩選</label><select id="scorePaperSel" onchange="renderScores()">'+opts+'</select></div>'
+      + '<div id="scoreSummary"></div><div id="scoreTable"></div>';
+    renderScores();
   });
+}
+
+function renderScores(){
+  var sel = $('scorePaperSel') ? $('scorePaperSel').value : '';
+  var rows = _scoreRows.filter(function(r){ return !sel || r.paperNo === sel; });
+  if (!rows.length) { $('scoreSummary').innerHTML=''; $('scoreTable').innerHTML = '<div class="empty">此考卷尚無成績</div>'; return; }
+  var sum = 0, passN = 0;
+  rows.forEach(function(r){ sum += Number(r.score||0); if (r.pass==='及格') passN++; });
+  $('scoreSummary').innerHTML = '<div class="statbar">'
+    + '<div class="stat"><b>'+rows.length+'</b><span>作答人次</span></div>'
+    + '<div class="stat"><b>'+Math.round(sum/rows.length)+'</b><span>平均分數</span></div>'
+    + '<div class="stat"><b>'+passN+'</b><span>及格人數</span></div>'
+    + '<div class="stat"><b>'+Math.round(passN/rows.length*100)+'%</b><span>及格率</span></div>'
+    + '</div>';
+  var html = '<table><tr><th>時間</th><th>卷號</th><th>卷名</th><th>員工編號</th><th>姓名</th><th>院區</th><th>身分別</th><th>分數</th><th>答對</th><th>結果</th></tr>';
+  rows.forEach(function(r){
+    html += '<tr><td>'+esc(r.time)+'</td><td>'+esc(r.paperNo||'')+'</td><td>'+esc(r.paperName||'')+'</td><td>'+esc(r.empId||'')+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.clinic||'')+'</td><td>'+esc(r.role)+'</td><td>'+r.score+'</td><td>'+r.correct+'/'+r.total+'</td><td class="'+(r.pass==='及格'?'pass':'fail')+'">'+esc(r.pass)+'</td></tr>';
+  });
+  html += '</table>';
+  $('scoreTable').innerHTML = html;
 }
 
 document.addEventListener('keydown', function(ev){
