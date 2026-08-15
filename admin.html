@@ -33,6 +33,11 @@
   .statbar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;}
   @media(max-width:640px){.statbar{grid-template-columns:repeat(2,1fr);}}
   .stat{background:var(--brand-light);border-radius:10px;padding:12px;text-align:center;}
+  .stat.clickable{cursor:pointer;transition:.12s;}
+  .stat.clickable:hover{transform:translateY(-2px);box-shadow:0 3px 8px rgba(15,60,54,.15);}
+  .filterbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px;}
+  .fchip{padding:6px 14px;border-radius:999px;background:#e2e9e7;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--muted);}
+  .fchip.on{background:var(--brand-dark);color:#fff;}
   .stat b{font-size:1.4rem;color:var(--brand-dark);display:block;}
   .stat span{font-size:.78rem;color:var(--muted);}
   .qcard{border:1.5px solid #e2e9e7;border-radius:12px;padding:14px;margin-top:14px;}
@@ -174,10 +179,10 @@ function login(){
 
 function renderStats(s){
   $('statbar').innerHTML =
-    '<div class="stat"><b>'+s.doctor.draft+'</b><span>醫師版 待審</span></div>'
-    +'<div class="stat"><b>'+s.doctor.approved+'</b><span>醫師版 已上架</span></div>'
-    +'<div class="stat"><b>'+s.staff.draft+'</b><span>一般版 待審</span></div>'
-    +'<div class="stat"><b>'+s.staff.approved+'</b><span>一般版 已上架</span></div>';
+    '<div class="stat clickable" onclick="filterFromCard(\'doctor\',\'draft\')" title="點我列出題目"><b>'+s.doctor.draft+'</b><span>醫師版 待審</span></div>'
+    +'<div class="stat clickable" onclick="filterFromCard(\'doctor\',\'approved\')" title="點我列出題目"><b>'+s.doctor.approved+'</b><span>醫師版 已上架</span></div>'
+    +'<div class="stat clickable" onclick="filterFromCard(\'staff\',\'draft\')" title="點我列出題目"><b>'+s.staff.draft+'</b><span>一般版 待審</span></div>'
+    +'<div class="stat clickable" onclick="filterFromCard(\'staff\',\'approved\')" title="點我列出題目"><b>'+s.staff.approved+'</b><span>一般版 已上架</span></div>';
   if (s.examSizeDoctor !== undefined) $('setDocSize').value = s.examSizeDoctor;
   if (s.examSizeStaff !== undefined) $('setStaffSize').value = s.examSizeStaff;
   if (s.passScore !== undefined) $('setPass').value = s.passScore;
@@ -196,8 +201,9 @@ function refreshAll(){
   switchTab(curTab);
 }
 
-function switchTab(tab){
+function switchTab(tab, keepFilter){
   curTab = tab;
+  if (!keepFilter) _roleFilter = '';
   ['draft','approved','rejected','papers','scores','admins'].forEach(function(t){
     $('tab-'+t).className = 'tab' + (t===tab ? ' on' : '');
   });
@@ -205,6 +211,12 @@ function switchTab(tab){
   else if (tab === 'admins') loadAdmins();
   else if (tab === 'papers') loadPapers();
   else loadList(tab);
+}
+
+function filterFromCard(role, status){
+  _roleFilter = role;
+  switchTab(status, true);
+  window.scrollTo({top: $('listArea').offsetTop - 20, behavior:'smooth'});
 }
 
 /* ===== 考卷管理 ===== */
@@ -370,21 +382,68 @@ function doRemoveAdmin(i){
   });
 }
 
+var _fullList = [], _listStatus = 'draft', _roleFilter = '', _sample = null;
+
 function loadList(status){
+  _listStatus = status;
+  _sample = null;
   $('listArea').innerHTML = '<div class="loading">載入中…</div>';
   get({action:'listQ', status:status}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
-    renderList(res.questions || [], status);
+    _fullList = res.questions || [];
+    renderListView();
   });
 }
 
-function renderList(list, status){
-  _qRecs = [];
-  if (!list.length) {
-    $('listArea').innerHTML = '<div class="empty">目前沒有'+(status==='draft'?'待審核':status==='approved'?'已上架':'已退回')+'的題目</div>';
+function filteredList_(){
+  return _fullList.filter(function(q){ return !_roleFilter || q.role === _roleFilter; });
+}
+
+function setRoleFilter(r){ _roleFilter = r; _sample = null; renderListView(); }
+
+function rollSample(){
+  var n = Number($('sampleN') ? $('sampleN').value : 5) || 5;
+  var list = filteredList_();
+  if (!list.length) { toast('目前沒有可抽的題目','err'); return; }
+  if (n > list.length) n = list.length;
+  var idxs = list.map(function(_, i){ return i; });
+  for (var i = idxs.length - 1; i > 0; i--) { var j = Math.floor(Math.random()*(i+1)); var t = idxs[i]; idxs[i]=idxs[j]; idxs[j]=t; }
+  _sample = idxs.slice(0, n).map(function(i){ return list[i]; });
+  renderListView(true);
+}
+
+function clearSample(){ _sample = null; renderListView(); }
+
+function renderListView(keepSample){
+  if (!keepSample && _sample) {
+    // 過濾條件變動時重置抽樣
+  }
+  var statusName = _listStatus==='draft'?'待審核':_listStatus==='approved'?'已上架':'已退回';
+  var list = filteredList_();
+  var view = _sample || list;
+  var bar = '<div class="filterbar">'
+    + '<span class="fchip '+(_roleFilter===''?'on':'')+'" onclick="setRoleFilter(\'\')">全部</span>'
+    + '<span class="fchip '+(_roleFilter==='doctor'?'on':'')+'" onclick="setRoleFilter(\'doctor\')">🩺 醫師版</span>'
+    + '<span class="fchip '+(_roleFilter==='staff'?'on':'')+'" onclick="setRoleFilter(\'staff\')">💼 一般版</span>'
+    + '<span style="flex:1;"></span>'
+    + '<input type="number" id="sampleN" value="5" min="1" max="50" style="width:70px;">'
+    + '<button class="btn btn-gold" onclick="rollSample()">🎲 隨機抽題</button>'
+    + (_sample ? '<button class="btn btn-ghost" onclick="clearSample()">顯示全部</button>' : '')
+    + '</div>';
+  if (!view.length) {
+    $('listArea').innerHTML = bar + '<div class="empty">目前沒有符合條件的'+statusName+'題目</div>';
     return;
   }
-  var html = '<p class="note">共 '+list.length+' 題（依來源檔案上傳日期 新→舊 排序，前台考卷以最新文件題目優先出題）</p>';
+  var info = _sample
+    ? '<p class="note">🎲 已隨機抽出 <b>'+view.length+'</b> 題（範圍：'+(_roleFilter?(_roleFilter==='doctor'?'醫師版':'一般版'):'全部')+' '+statusName+' 共 '+list.length+' 題）。挑到適合的按「核准上架」即進入題庫；再按一次「隨機抽題」可重抽一批。</p>'
+    : '<p class="note">共 '+list.length+' 題'+(_roleFilter?'（已篩選：'+(_roleFilter==='doctor'?'醫師版':'一般版')+'）':'')+'，依來源檔案上傳日期 新→舊 排序</p>';
+  renderCards_(view, bar + info);
+}
+
+function renderCards_(list, headerHtml){
+  var status = _listStatus;
+  _qRecs = [];
+  var html = headerHtml || '';
   list.forEach(function(q){
     var idx = _qRecs.length;
     _qRecs.push(q);
@@ -458,7 +517,14 @@ function setSt(status, idx){
   get({action:'setStatus', id:r.id, status:status}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
     toast(status==='approved' ? '已上架' : status==='rejected' ? '已退回' : '已改為待審');
-    refreshAll();
+    // 就地更新清單（保留目前的篩選與隨機抽樣批次），並更新上方統計
+    _fullList = _fullList.filter(function(q){ return q.id !== r.id; });
+    if (_sample) {
+      _sample = _sample.filter(function(q){ return q.id !== r.id; });
+      if (!_sample.length) _sample = null;
+    }
+    renderListView(true);
+    get({action:'stats'}, function(s){ if(!s.error) renderStats(s); });
   });
 }
 
