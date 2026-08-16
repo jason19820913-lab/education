@@ -93,6 +93,7 @@
       <button class="btn btn-gold" onclick="doImport()">🔄 匯入草稿區新題目</button>
       <button class="btn btn-primary" onclick="quickRandom()">🎲 更新隨機題目（AI 重新出題）</button>
       <button class="btn btn-ghost" onclick="doSyncDocs()">📚 同步文件庫</button>
+      <button class="btn btn-ghost" onclick="doAiDiag()">🧪 AI 診斷</button>
       <button class="btn btn-ghost" onclick="refreshAll()">重新整理</button>
       <div class="statbar" id="statbar"></div>
       <p class="note" id="reserveInfo" style="margin-top:10px;"></p>
@@ -462,13 +463,27 @@ function quickRandom(){
       if (!res.results || !res.results[r]) return;
       var label = r==='doctor'?'醫師版':'一般版';
       if (res.results[r].mode==='gemini') msgs.push(label+'：AI 新出 '+res.results[r].added+' 題');
-      else msgs.push(label+'：改用備用題庫換新（AI 未啟用或失敗）');
+      else msgs.push(label+'：改用備用題庫換新。原因：'+(res.results[r].reason||'不明，請按「🧪 AI 診斷」'));
     });
     if (res.sync && res.sync.pending > 0) msgs.push('另有 '+res.sync.pending+' 份文件待同步，請按「📚 同步文件庫」');
     toast(msgs.join('；'));
     get({action:'stats'}, function(s){ if(!s.error) renderStats(s); });
     switchTab('draft', true);
     window.scrollTo({top: $('listArea').offsetTop - 20, behavior:'smooth'});
+  });
+}
+
+/* AI 診斷：逐步檢查 Drive 服務／金鑰／文件庫／Gemini 連線 */
+function doAiDiag(){
+  toast('診斷中，請稍候…');
+  get({action:'aiDiag'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    var lines = (res.steps||[]).map(function(s){
+      return (s.ok ? '✅ ' : '❌ ') + s.item + ' — ' + s.note;
+    });
+    lines.push('');
+    lines.push(res.allOK ? '🎉 全部正常，可以使用「🎲 更新隨機題目」與模擬練習即時出題。' : '請依上方 ❌ 項目的說明修正後再試。');
+    alert('AI 出題診斷結果：\n\n' + lines.join('\n'));
   });
 }
 
