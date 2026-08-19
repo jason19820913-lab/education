@@ -45,6 +45,9 @@
   .chip{background:#eef2f1;border-radius:999px;padding:2px 10px;font-weight:600;}
   .chip.doctor{background:#e3ecfb;color:#1d4e89;}
   .chip.staff{background:#fdf3e0;color:#8a6210;}
+  .chip.pharm{background:#e8f5f0;color:#0f6a4f;}
+  .qimg-thumb{max-width:180px;max-height:130px;border:1.5px solid #e2e9e7;border-radius:8px;display:block;margin:6px 0;}
+  .qimg-opt{max-width:110px;max-height:85px;border:1.5px solid #e2e9e7;border-radius:6px;display:block;margin-top:4px;}
   .chip.draft{background:#fff3cd;color:#8a6d1a;}
   .chip.approved{background:#e3f5ea;color:var(--good);}
   .chip.rejected{background:#fdecea;color:var(--bad);}
@@ -92,6 +95,7 @@
     <div class="card">
       <button class="btn btn-gold" onclick="doImport()">🔄 匯入草稿區新題目</button>
       <button class="btn btn-primary" onclick="quickRandom()">🎲 更新隨機題目（AI 重新出題）</button>
+      <button class="btn btn-gold" onclick="doGenPharm()">💊 從藥品集出題</button>
       <button class="btn btn-ghost" onclick="doSyncDocs()">📚 同步文件庫</button>
       <button class="btn btn-ghost" onclick="doAiDiag()">🧪 AI 診斷</button>
       <button class="btn btn-ghost" onclick="refreshAll()">重新整理</button>
@@ -105,7 +109,10 @@
           <div class="fld"><label>一般版正式卷題數</label><input type="number" id="setStaffSize" min="1" max="100"></div>
         </div>
         <div class="row2" style="align-items:end;">
+          <div class="fld"><label>藥師版正式卷題數</label><input type="number" id="setPharmSize" min="1" max="100"></div>
           <div class="fld"><label>及格分數</label><input type="number" id="setPass" min="0" max="100"></div>
+        </div>
+        <div class="row2" style="align-items:end;">
           <div class="fld"><button class="btn btn-primary" onclick="saveSettings()" style="margin-top:18px;">💾 儲存出卷設定</button></div>
         </div>
         <p class="note">正式卷出題方式：依來源檔案上傳日期 新→舊 排序後，「輪流」從每份文件各抽一題直到滿額——各文件平均涵蓋、新文件優先，不會整卷集中在同一份檔案。模擬練習則由員工自選題數、全題庫隨機。</p>
@@ -136,6 +143,7 @@ var _qRecs = [];
 var curTab = 'draft';
 
 function $(id){ return document.getElementById(id); }
+function roleLabel(r){ return r==='doctor' ? '醫師版' : r==='pharm' ? '藥師版' : '一般版'; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function toast(msg, type){
   var t = $('toast');
@@ -187,22 +195,27 @@ function renderStats(s){
     '<div class="stat clickable" onclick="filterFromCard(\'doctor\',\'draft\')" title="點我列出題目"><b>'+s.doctor.draft+'</b><span>醫師版 待審</span></div>'
     +'<div class="stat clickable" onclick="filterFromCard(\'doctor\',\'approved\')" title="點我列出題目"><b>'+s.doctor.approved+'</b><span>醫師版 已上架</span></div>'
     +'<div class="stat clickable" onclick="filterFromCard(\'staff\',\'draft\')" title="點我列出題目"><b>'+s.staff.draft+'</b><span>一般版 待審</span></div>'
-    +'<div class="stat clickable" onclick="filterFromCard(\'staff\',\'approved\')" title="點我列出題目"><b>'+s.staff.approved+'</b><span>一般版 已上架</span></div>';
+    +'<div class="stat clickable" onclick="filterFromCard(\'staff\',\'approved\')" title="點我列出題目"><b>'+s.staff.approved+'</b><span>一般版 已上架</span></div>'
+    +(s.pharm ? '<div class="stat clickable" onclick="filterFromCard(\'pharm\',\'draft\')" title="點我列出題目"><b>'+s.pharm.draft+'</b><span>藥師版 待審</span></div>'
+    +'<div class="stat clickable" onclick="filterFromCard(\'pharm\',\'approved\')" title="點我列出題目"><b>'+s.pharm.approved+'</b><span>藥師版 已上架</span></div>' : '');
   var dR = (s.doctor.reserve !== undefined) ? s.doctor.reserve : '—';
   var sR = (s.staff.reserve !== undefined) ? s.staff.reserve : '—';
+  var pR = (s.pharm && s.pharm.reserve !== undefined) ? s.pharm.reserve : '—';
   var low = (Number(dR) < 10 || Number(sR) < 10);
-  $('reserveInfo').innerHTML = '📦 備用題庫存量：醫師版 <b>'+dR+'</b> 題／一般版 <b>'+sR+'</b> 題'
-    + (low ? '　<span style="color:var(--bad);font-weight:700;">備用題庫偏低，請向 Claude 說「更新題庫」補充新題</span>' : '');
+  $('reserveInfo').innerHTML = '📦 備用題庫存量：醫師版 <b>'+dR+'</b> 題／一般版 <b>'+sR+'</b> 題／藥師版 <b>'+pR+'</b> 題'
+    + (low ? '　<span style="color:var(--bad);font-weight:700;">備用題庫偏低，請向 Claude 說「更新題庫」補充新題</span>' : '')
+    + (Number(pR) < 10 ? '　<span style="color:var(--bad);font-weight:700;">藥師版偏低，可按「💊 從藥品集出題」補充</span>' : '');
   if (s.examSizeDoctor !== undefined) $('setDocSize').value = s.examSizeDoctor;
   if (s.examSizeStaff !== undefined) $('setStaffSize').value = s.examSizeStaff;
+  if (s.examSizePharm !== undefined) $('setPharmSize').value = s.examSizePharm;
   if (s.passScore !== undefined) $('setPass').value = s.passScore;
 }
 
 function saveSettings(){
-  var d = $('setDocSize').value, s = $('setStaffSize').value, ps = $('setPass').value;
-  get({action:'updateSettings', examSizeDoctor:d, examSizeStaff:s, passScore:ps}, function(res){
+  var d = $('setDocSize').value, s = $('setStaffSize').value, ph = $('setPharmSize').value, ps = $('setPass').value;
+  get({action:'updateSettings', examSizeDoctor:d, examSizeStaff:s, examSizePharm:ph, passScore:ps}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
-    toast('出卷設定已儲存（醫師 '+res.examSizeDoctor+' 題／一般 '+res.examSizeStaff+' 題／及格 '+res.passScore+' 分）');
+    toast('出卷設定已儲存（醫師 '+res.examSizeDoctor+' 題／一般 '+res.examSizeStaff+' 題／藥師 '+res.examSizePharm+' 題／及格 '+res.passScore+' 分）');
   });
 }
 
@@ -230,7 +243,7 @@ function renderOwnForm(){
     '<h3 style="color:var(--brand-dark);">✍️ 自行出題</h3>'
     + '<p class="note">自己撰寫題目與答案，可「直接上架」進題庫（即可被選入考卷／模擬練習），或先「存為待審」之後再核准。醫師版題目前台一律不顯示出處。</p>'
     + '<div class="row2">'
-    + '<div class="fld"><label>身分別</label><select id="ownRole"><option value="doctor">醫師版</option><option value="staff">一般人員版</option></select></div>'
+    + '<div class="fld"><label>身分別</label><select id="ownRole"><option value="doctor">醫師版</option><option value="staff">一般人員版</option><option value="pharm">藥師版</option></select></div>'
     + '<div class="fld"><label>正確答案</label><select id="ownAns"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>'
     + '</div>'
     + '<div class="fld"><label>題目</label><textarea id="ownQ" placeholder="請輸入題目敘述"></textarea></div>'
@@ -291,7 +304,7 @@ function loadPapers(){
         var st = pp.status==='disabled' ? '<span class="chip rejected">已停用</span>'
           : (pp.open ? '<span class="chip approved">開放中</span>' : '<span class="chip draft">未在期間</span>');
         html += '<tr><td><b>'+esc(pp.paperNo)+'</b></td><td>'+esc(pp.name)+'</td>'
-          + '<td>'+(pp.role==='doctor'?'醫師版':'一般版')+'</td><td>'+pp.count+'</td>'
+          + '<td>'+roleLabel(pp.role)+'</td><td>'+pp.count+'</td>'
           + '<td>'+esc(period)+'</td><td>'+st+'</td>'
           + '<td>'+pp.takers+'</td><td>'+(pp.avgScore===''?'—':pp.avgScore)+'</td><td>'+(pp.passRate===''?'—':pp.passRate+'%')+'</td>'
           + '<td>'+(pp.status==='disabled'
@@ -305,7 +318,7 @@ function loadPapers(){
       + '<div class="row2">'
       + '<div class="fld"><label>考卷名稱</label><input id="npName" placeholder="例：115年9月 醫師月考"></div>'
       + '<div class="fld"><label>身分別</label><select id="npRole" onchange="loadPickPool()">'
-      + '<option value="doctor">醫師版</option><option value="staff">一般人員版</option></select></div>'
+      + '<option value="doctor">醫師版</option><option value="staff">一般人員版</option><option value="pharm">藥師版</option></select></div>'
       + '</div>'
       + '<div class="row2">'
       + '<div class="fld"><label>開放日（留空＝立即開放）</label><input type="date" id="npStart"></div>'
@@ -338,7 +351,9 @@ function loadPickPool(){
       if (fkey !== lastFile) { html += '<div style="font-size:.78rem;font-weight:700;color:var(--muted);margin:10px 0 4px;">📄 '+esc(fkey)+'</div>'; lastFile = fkey; }
       html += '<label style="display:flex;gap:8px;align-items:flex-start;font-size:.88rem;padding:4px 2px;cursor:pointer;">'
         + '<input type="checkbox" class="pickbox" data-i="'+i+'" onchange="updatePickCount()" style="width:auto;margin-top:4px;">'
-        + '<span>'+esc(q.q)+' <span style="color:var(--muted);">（答案 '+esc(q.ans)+'）</span></span></label>';
+        + '<span>'+esc(q.q)+' <span style="color:var(--muted);">（答案 '+esc(q.ans)+'）</span>'
+        + (q.qimg ? '<img class="qimg-opt" src="'+esc(q.qimg)+'" loading="lazy">' : '')
+        + '</span></label>';
     });
     $('pickList').innerHTML = html;
     updatePickCount();
@@ -453,16 +468,17 @@ function loadList(status){
 /* 頂部「更新隨機題目」（v8）：重新讀取資料庫文件、AI 現場出全新一批待審題。
  * 舊待審整批退回備用池；未設 Gemini 金鑰或 AI 失敗時自動改用備用題庫換新。 */
 function quickRandom(){
-  var roleTxt = _roleFilter==='doctor' ? '醫師版' : _roleFilter==='staff' ? '一般版' : '醫師版＋一般版';
-  if (!confirm('要重新出「'+roleTxt+'」的待審題目嗎？系統將重新讀取資料庫文件、由 AI 現場出全新一批題目（約需 30~60 秒），目前待審題目會退回備用題庫。')) return;
-  toast('AI 正在重新讀取文件出題，約需 30~60 秒，請勿離開…');
+  var roleTxt = _roleFilter ? roleLabel(_roleFilter) : '醫師版＋一般版＋藥師版';
+  if (!confirm('要重新出「'+roleTxt+'」的待審題目嗎？醫師版／一般版將重新讀取資料庫文件、由 AI 現場出題；藥師版則從藥品集重新產生辨識題（約需 30~60 秒）。目前待審題目會退回備用題庫。')) return;
+  toast('正在重新出題，約需 30~60 秒，請勿離開…');
   get({action:'regenDrafts', role:_roleFilter}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
     var msgs = [];
-    ['doctor','staff'].forEach(function(r){
+    ['doctor','staff','pharm'].forEach(function(r){
       if (!res.results || !res.results[r]) return;
-      var label = r==='doctor'?'醫師版':'一般版';
+      var label = roleLabel(r);
       if (res.results[r].mode==='gemini') msgs.push(label+'：AI 新出 '+res.results[r].added+' 題');
+      else if (res.results[r].mode==='pharm') msgs.push(label+'：從藥品集新出 '+res.results[r].added+' 題');
       else msgs.push(label+'：改用備用題庫換新。原因：'+(res.results[r].reason||'不明，請按「🧪 AI 診斷」'));
     });
     if (res.sync && res.sync.pending > 0) msgs.push('另有 '+res.sync.pending+' 份文件待同步，請按「📚 同步文件庫」');
@@ -484,6 +500,17 @@ function doAiDiag(){
     lines.push('');
     lines.push(res.allOK ? '🎉 全部正常，可以使用「🎲 更新隨機題目」與模擬練習即時出題。' : '請依上方 ❌ 項目的說明修正後再試。');
     alert('AI 出題診斷結果：\n\n' + lines.join('\n'));
+  });
+}
+
+/* 從藥品集出題：讀取院內藥品集網站，產生辨識題（看圖選藥名／看藥名選圖／院內代碼題）進備用池並補滿待審 */
+function doGenPharm(){
+  if (!confirm('要從院內藥品集產生 30 題藥品辨識題嗎？（混合：看圖選藥名／看藥名選圖／院內代碼題）題目會進入藥師版備用題庫，並自動補滿待審池。')) return;
+  toast('正在讀取藥品集出題，請稍候…');
+  get({action:'genPharmQuestions', count:30}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('已新增 '+res.added+' 題藥師版辨識題（藥品集共 '+res.total+' 項、含照片 '+res.photoCount+' 項），請至「待審核」審題');
+    refreshAll();
   });
 }
 
@@ -527,6 +554,7 @@ function renderListView(keepSample){
     + '<span class="fchip '+(_roleFilter===''?'on':'')+'" onclick="setRoleFilter(\'\')">全部</span>'
     + '<span class="fchip '+(_roleFilter==='doctor'?'on':'')+'" onclick="setRoleFilter(\'doctor\')">🩺 醫師版</span>'
     + '<span class="fchip '+(_roleFilter==='staff'?'on':'')+'" onclick="setRoleFilter(\'staff\')">💼 一般版</span>'
+    + '<span class="fchip '+(_roleFilter==='pharm'?'on':'')+'" onclick="setRoleFilter(\'pharm\')">💊 藥師版</span>'
     + '<span style="flex:1;"></span>'
     + '<input type="number" id="sampleN" value="5" min="1" max="50" style="width:70px;">'
     + '<button class="btn btn-gold" onclick="rollSample()">🎲 隨機抽題</button>'
@@ -537,8 +565,8 @@ function renderListView(keepSample){
     return;
   }
   var info = _sample
-    ? '<p class="note">🎲 已隨機抽出 <b>'+view.length+'</b> 題（範圍：'+(_roleFilter?(_roleFilter==='doctor'?'醫師版':'一般版'):'全部')+' '+statusName+' 共 '+list.length+' 題）。挑到適合的按「核准上架」即進入題庫；再按一次「隨機抽題」可重抽一批。</p>'
-    : '<p class="note">共 '+list.length+' 題'+(_roleFilter?'（已篩選：'+(_roleFilter==='doctor'?'醫師版':'一般版')+'）':'')+'，依來源檔案上傳日期 新→舊 排序</p>';
+    ? '<p class="note">🎲 已隨機抽出 <b>'+view.length+'</b> 題（範圍：'+(_roleFilter?roleLabel(_roleFilter):'全部')+' '+statusName+' 共 '+list.length+' 題）。挑到適合的按「核准上架」即進入題庫；再按一次「隨機抽題」可重抽一批。</p>'
+    : '<p class="note">共 '+list.length+' 題'+(_roleFilter?'（已篩選：'+roleLabel(_roleFilter)+'）':'')+'，依來源檔案上傳日期 新→舊 排序</p>';
   renderCards_(view, bar + info);
 }
 
@@ -551,22 +579,30 @@ function renderCards_(list, headerHtml){
     _qRecs.push(q);
     html += '<div class="qcard" id="qc-'+idx+'">'
       + '<div class="meta">'
-      + '<span class="chip '+q.role+'">'+(q.role==='doctor'?'醫師版':'一般版')+'</span>'
+      + '<span class="chip '+q.role+'">'+roleLabel(q.role)+'</span>'
       + '<span class="chip '+q.status+'">'+(q.status==='draft'?'待審':q.status==='approved'?'已上架':'已退回')+'</span>'
+      + (q.qtype==='imgopt' ? '<span class="chip">🖼 看藥名選圖</span>' : q.qimg ? '<span class="chip">📷 圖片題</span>' : '')
       + '<span>📄 '+esc(q.fileName||'')+'（'+esc(q.fileDate||'')+'）</span>'
       + '</div>'
       + '<div class="fld"><label>題目</label><textarea id="q-q-'+idx+'">'+esc(q.q)+'</textarea></div>'
+      + (q.qimg ? '<img class="qimg-thumb" src="'+esc(q.qimg)+'" loading="lazy">' : '')
       + '<div class="row2">'
       + '<div class="fld"><label>選項 A</label><input id="q-oA-'+idx+'" value="'+esc(q.oA)+'"></div>'
       + '<div class="fld"><label>選項 B</label><input id="q-oB-'+idx+'" value="'+esc(q.oB)+'"></div>'
       + '<div class="fld"><label>選項 C</label><input id="q-oC-'+idx+'" value="'+esc(q.oC)+'"></div>'
       + '<div class="fld"><label>選項 D</label><input id="q-oD-'+idx+'" value="'+esc(q.oD)+'"></div>'
       + '</div>'
+      + (q.qtype==='imgopt'
+        ? '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 8px;">'
+          + ['A','B','C','D'].map(function(x){ return '<div style="text-align:center;font-size:.78rem;color:var(--muted);"><b>'+x+'</b><img class="qimg-opt" src="'+esc(q['o'+x]||'')+'" loading="lazy"></div>'; }).join('')
+          + '</div>'
+        : '')
       + '<div class="row2">'
       + '<div class="fld"><label>正確答案</label><select id="q-ans-'+idx+'">'+ansOpts(q.ans)+'</select></div>'
       + '<div class="fld"><label>身分別</label><select id="q-role-'+idx+'">'
       + '<option value="doctor"'+(q.role==='doctor'?' selected':'')+'>醫師版</option>'
       + '<option value="staff"'+(q.role==='staff'?' selected':'')+'>一般人員版</option>'
+      + '<option value="pharm"'+(q.role==='pharm'?' selected':'')+'>藥師版</option>'
       + '</select></div>'
       + '</div>'
       + '<div class="fld"><label>解析</label><textarea id="q-explain-'+idx+'">'+esc(q.explain||'')+'</textarea></div>'
