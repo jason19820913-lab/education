@@ -88,6 +88,9 @@
   .fc-back{font-size:1.05rem;line-height:1.9;}
   .fc-back b{color:var(--brand-dark);font-size:1.15rem;}
   .fc-ctrl{display:flex;justify-content:center;gap:10px;margin-top:16px;flex-wrap:wrap;}
+  .fc-hints{display:flex;justify-content:center;gap:22px;flex-wrap:wrap;margin-top:14px;text-align:center;}
+  .fc-hint .tagchip{display:inline-block;background:var(--brand-light);color:var(--brand-dark);border-radius:999px;padding:3px 12px;font-weight:700;font-size:.78rem;}
+  .fc-hint p{margin:6px 0 0;font-size:.98rem;font-weight:600;color:var(--ink);}
   .spinner{width:36px;height:36px;border:4px solid var(--brand-light);border-top-color:var(--brand);border-radius:50%;margin:0 auto 12px;animation:spin 1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .userbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
@@ -517,11 +520,26 @@ function fcDoShuffle(){
   }
   FC.idx = 0; FC.back = false;
 }
+function fcHints_(d){
+  var hs = [];
+  var dose = [d.dosage_form, d.strength].filter(function(x){ return String(x||'').trim(); }).join(' / ');
+  if (dose) hs.push(['劑型 / 含量', dose]);
+  var app = [d.color, d.shape].filter(function(x){ return String(x||'').trim(); }).join(' / ');
+  if (app) hs.push(['顏色 / 形狀', app]);
+  var mk = [d.marking, d.scoring].filter(function(x){ return String(x||'').trim(); }).join(' / ');
+  if (mk) hs.push(['標記 / 刻痕', mk]);
+  if (!hs.length) return '';
+  return '<div class="fc-hints">' + hs.map(function(h){
+    return '<div class="fc-hint"><span class="tagchip">'+esc(h[0])+'</span><p>'+esc(h[1])+'</p></div>';
+  }).join('') + '</div>';
+}
 function renderFC(){
   var d = FC.drugs[FC.idx];
   $('fcCounter').textContent = '第 '+(FC.idx+1)+' / '+FC.drugs.length+' 張';
   if (!FC.back) {
-    $('fcCard').innerHTML = '<img src="'+esc(d.photo_url)+'" alt="藥品照片"><p class="note" style="margin-top:10px;">點卡片翻面看答案</p>';
+    $('fcCard').innerHTML = '<img src="'+esc(d.photo_url)+'" alt="藥品照片">'
+      + fcHints_(d)
+      + '<p class="note" style="margin-top:10px;">點卡片翻面看答案</p>';
   } else {
     var zh = esc(d.name_zh||''), en = esc(d.name_en||'');
     $('fcCard').innerHTML = '<div class="fc-back">'
