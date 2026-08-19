@@ -242,7 +242,7 @@ function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function p2(n){ return String(n).padStart(2,'0'); }
 function roleLabel(r){ return r==='doctor' ? '醫師版' : r==='pharm' ? '藥師版' : '一般人員版'; }
-var MED_API = 'https://script.google.com/macros/s/AKfycbyBurrw2JPcBLflnXHJnTsmbYtkwpNIiXWz9t-HZtxZtWHJ5Jyyxr1JzN9aGYf4MKeLIA/exec';
+/* 藥品集資料改由考題系統 API（action=listDrugs）直讀原始試算表提供，快速且格式固定 */
 function qPhotoHtml(q){ return q && q.qimg ? '<img class="qphoto" src="'+esc(q.qimg)+'" alt="藥品照片">' : ''; }
 function optInner(q, text){
   if (q && q.qtype === 'imgopt') return '<img src="'+esc(text)+'" alt="選項圖片">';
@@ -432,7 +432,9 @@ function submitQuiz() {
 function startPractice(r){
   role = r;
   var cnt = $('pracCount') ? $('pracCount').value : '20';
-  $('loadingText').textContent = 'AI 正在重新閱讀文件出題，約需 10~30 秒，請稍候…';
+  $('loadingText').textContent = (r === 'pharm')
+    ? '正在從藥品集產生辨識題，請稍候…'
+    : 'AI 正在重新閱讀文件出題，約需 10~30 秒，請稍候…';
   show('loadingCard');
   get({action:'getPractice', role:r, count:cnt, clinic:CRED.clinic, empId:CRED.empId, pwd:CRED.pwd}, function(res){
     if (res.error) { show('menuCard'); alert(res.error); return; }
@@ -497,18 +499,16 @@ function startFlashcards(){
   if (FC.drugs.length) { FC.idx = 0; FC.back = false; show('flashCard'); renderFC(); return; }
   $('loadingText').textContent = '藥品集載入中…';
   show('loadingCard');
-  fetch(MED_API + '?action=search&q=&limit=500')
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      var list = (res && res.ok && res.data) ? res.data : [];
-      FC.drugs = list.filter(function(d){ return String(d.photo_url || '').trim(); });
-      if (!FC.drugs.length) { show('menuCard'); alert('藥品集中目前沒有含照片的品項'); return; }
-      fcDoShuffle();
-      show('flashCard');
-      renderFC();
-      window.scrollTo({top:0, behavior:'smooth'});
-    })
-    .catch(function(err){ show('menuCard'); alert('藥品集載入失敗：'+err); });
+  get({action:'listDrugs'}, function(res){
+    if (res.error) { show('menuCard'); alert('藥品集載入失敗：'+res.error); return; }
+    var list = (res && res.data && res.data.length !== undefined) ? res.data : [];
+    FC.drugs = list.filter(function(d){ return String(d.photo_url || '').trim(); });
+    if (!FC.drugs.length) { show('menuCard'); alert('藥品集中目前沒有含照片的品項'); return; }
+    fcDoShuffle();
+    show('flashCard');
+    renderFC();
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
 }
 function fcDoShuffle(){
   for (var i = FC.drugs.length - 1; i > 0; i--) {
