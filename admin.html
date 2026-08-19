@@ -127,6 +127,7 @@
       <div class="tab" id="tab-papers" onclick="switchTab('papers')">🗂 考卷管理</div>
       <div class="tab" id="tab-scores" onclick="switchTab('scores')">📊 成績紀錄</div>
       <div class="tab" id="tab-admins" onclick="switchTab('admins')">👥 管理者白名單</div>
+      <div class="tab" id="tab-clinicaccts" onclick="switchTab('clinicaccts')">🏥 院區帳號</div>
     </div>
 
     <div id="listArea" class="card"><div class="empty">載入中…</div></div>
@@ -227,11 +228,12 @@ function refreshAll(){
 function switchTab(tab, keepFilter){
   curTab = tab;
   if (!keepFilter) _roleFilter = '';
-  ['draft','approved','rejected','own','papers','scores','admins'].forEach(function(t){
+  ['draft','approved','rejected','own','papers','scores','admins','clinicaccts'].forEach(function(t){
     $('tab-'+t).className = 'tab' + (t===tab ? ' on' : '');
   });
   if (tab === 'scores') loadScores();
   else if (tab === 'admins') loadAdmins();
+  else if (tab === 'clinicaccts') loadClinicAccts();
   else if (tab === 'papers') loadPapers();
   else if (tab === 'own') renderOwnForm();
   else loadList(tab);
@@ -400,6 +402,73 @@ function togglePaper(i, status){
     if (res.error) { toast(res.error,'err'); return; }
     toast(status==='enabled'?'已啟用':'已停用');
     loadPapers();
+  });
+}
+
+/* ===== v10：院區帳號白名單（限制只有院區電腦可使用前台） ===== */
+var _clinicAccts = [];
+function loadClinicAccts(){
+  $('listArea').innerHTML = '<div class="loading">載入中…</div>';
+  get({action:'listClinicAccts'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    _clinicAccts = res.accounts || [];
+    var gateOn = res.gate === 'on';
+    var html = '<h3 style="color:var(--brand-dark);">🏥 院區帳號白名單</h3>'
+      + '<p class="note">啟用管控後，前台（員工考試頁）只有以下列「院區 Google 帳號」完成授權的電腦才能使用；後台不受影響。<br>'
+      + '啟用前置作業：1️⃣ 依部署說明到 Google Cloud 建立 OAuth 用戶端 ID，貼到試算表「設定」的 googleClientId　2️⃣ 下方加入各院區電腦的 Google 帳號。</p>'
+      + '<p style="margin:12px 0;">目前狀態：'
+      + (gateOn ? '<span class="chip approved">✅ 管控啟用中</span>' : '<span class="chip draft">⏸ 未啟用（前台不限制）</span>')
+      + '　Google 用戶端 ID：' + (res.clientIdSet ? '<span class="chip approved">已設定</span>' : '<span class="chip rejected">未設定</span>')
+      + '　<button class="btn '+(gateOn?'btn-bad':'btn-ok')+'" onclick="toggleGate('+(gateOn?'false':'true')+')">'+(gateOn?'⏸ 停用管控':'▶ 啟用管控')+'</button></p>'
+      + '<div class="row2" style="align-items:end;">'
+      + '<div class="fld"><label>新增院區 Google 帳號</label><input id="newAcctEmail" placeholder="例：elite.banqiao@gmail.com"></div>'
+      + '<div class="fld"><label>備註（選填）</label><input id="newAcctNote" placeholder="例：板橋院區櫃台"></div>'
+      + '</div>'
+      + '<div style="margin-top:10px;"><button class="btn btn-primary" onclick="doAddClinicAcct()">➕ 加入白名單</button></div>';
+    if (!_clinicAccts.length) {
+      html += '<div class="empty">白名單目前是空的</div>';
+    } else {
+      html += '<table style="margin-top:14px;"><tr><th>Google 帳號</th><th>備註</th><th>加入時間</th><th></th></tr>';
+      _clinicAccts.forEach(function(a, i){
+        html += '<tr><td><b>'+esc(a.email)+'</b></td><td>'+esc(a.note||'')+'</td><td>'+esc(a.added||'')+'</td>'
+          + '<td><button class="btn btn-bad" onclick="doRemoveClinicAcct('+i+')">移除</button></td></tr>';
+      });
+      html += '</table>';
+    }
+    $('listArea').innerHTML = html;
+  });
+}
+
+function toggleGate(on){
+  var msg = on
+    ? '確定要「啟用」院區帳號管控嗎？啟用後前台只有白名單帳號授權過的電腦能使用，請先確認白名單與 googleClientId 都已設定。'
+    : '確定要「停用」院區帳號管控嗎？停用後任何電腦都能開啟前台（員工仍需帳密登入）。';
+  if (!confirm(msg)) return;
+  get({action:'setDeviceGate', gate: on ? 'on' : 'off'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast(res.gate === 'on' ? '已啟用院區帳號管控' : '已停用院區帳號管控');
+    loadClinicAccts();
+  });
+}
+
+function doAddClinicAcct(){
+  var email = $('newAcctEmail').value.trim();
+  if (!email) { toast('請輸入 Google 帳號','err'); return; }
+  get({action:'addClinicAcct', email: email, note: $('newAcctNote').value.trim()}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('已加入 ' + res.email);
+    loadClinicAccts();
+  });
+}
+
+function doRemoveClinicAcct(i){
+  var a = _clinicAccts[i];
+  if (!a) { toast('請重新整理','err'); return; }
+  if (!confirm('確定將 '+a.email+' 移出院區帳號白名單？移除後，此帳號授權過的電腦會立即失效。')) return;
+  get({action:'removeClinicAcct', email: a.email}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('已移除');
+    loadClinicAccts();
   });
 }
 
