@@ -106,6 +106,15 @@
 <div class="wrap">
 
   <!-- 登入 -->
+  <!-- v10：院區電腦授權閘門（僅在後台啟用管控時出現） -->
+  <div id="gateCard" class="card hidden">
+    <h3 style="color:var(--brand-dark);">🔒 院區電腦授權</h3>
+    <p class="desc" style="margin-top:8px;">本系統僅限院區電腦使用。請以「院區 Google 帳號」登入完成授權（每台電腦只需授權一次）。</p>
+    <div id="gsiBtn" style="margin:16px 0;display:flex;justify-content:center;"></div>
+    <p class="note" id="gateMsg" style="color:var(--bad);"></p>
+    <p class="note">若這台是院區電腦但無法授權，請確認瀏覽器已登入院區 Google 帳號，或聯絡管理者將帳號加入白名單。</p>
+  </div>
+
   <div id="loginCard" class="card">
     <span class="pill">員工登入</span>
     <label class="field">院區</label>
@@ -254,11 +263,23 @@ function optInner(q, text){
 }
 function nowStr(){ var n=new Date(); return (n.getFullYear()-1911)+'/'+p2(n.getMonth()+1)+'/'+p2(n.getDate())+' '+p2(n.getHours())+':'+p2(n.getMinutes()); }
 
+var GTOK = '';
+try { GTOK = localStorage.getItem('examGtok') || ''; } catch (e) {}
+
 function get(params, cb) {
+  if (GTOK && params.gtok === undefined) params.gtok = GTOK;
   var q = Object.keys(params).map(function(k){
     return encodeURIComponent(k)+'='+encodeURIComponent(params[k]==null?'':params[k]);
   }).join('&');
-  fetch(API+'?'+q).then(function(r){ return r.json(); }).then(cb).catch(function(err){
+  fetch(API+'?'+q).then(function(r){ return r.json(); }).then(function(res){
+    if (res && res.needGoogleAuth) { // 裝置授權失效 → 回到 Google 授權
+      GTOK = '';
+      try { localStorage.removeItem('examGtok'); } catch (e) {}
+      boot();
+      return;
+    }
+    cb(res);
+  }).catch(function(err){
     show('menuCard');
     if (!AUTH) show('loginCard');
     alert('連線失敗，請稍後再試：'+err);
@@ -266,10 +287,52 @@ function get(params, cb) {
 }
 
 function show(id) {
-  ['loginCard','menuCard','loadingCard','quizCard','pracCard','flashCard','resultCard'].forEach(function(c){
+  ['gateCard','loginCard','menuCard','loadingCard','quizCard','pracCard','flashCard','resultCard'].forEach(function(c){
     $(c).classList.add('hidden');
   });
   $(id).classList.remove('hidden');
+}
+
+/* ===== v10：院區電腦授權閘門 ===== */
+function boot(){
+  get({action:'gateInfo'}, function(res){
+    if (res.error || res.gate !== 'on' || res.valid) { // 未啟用管控或已授權 → 照常
+      if ($('loginCard').classList.contains('hidden') && !AUTH) show('loginCard');
+      loadClinics();
+      return;
+    }
+    showGate(String(res.clientId || ''));
+  });
+}
+
+var _gsiLoaded = false;
+function showGate(clientId){
+  show('gateCard');
+  if (!clientId) { $('gateMsg').textContent = '系統尚未完成 Google 登入設定（googleClientId），請聯絡管理者。'; return; }
+  if (_gsiLoaded && window.google && google.accounts) { renderGsi(clientId); return; }
+  var s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.async = true;
+  s.onload = function(){ _gsiLoaded = true; renderGsi(clientId); };
+  s.onerror = function(){ $('gateMsg').textContent = 'Google 登入元件載入失敗，請檢查網路後重新整理。'; };
+  document.head.appendChild(s);
+}
+function renderGsi(clientId){
+  try {
+    google.accounts.id.initialize({ client_id: clientId, callback: onGoogleCred });
+    google.accounts.id.renderButton($('gsiBtn'), { theme: 'outline', size: 'large', text: 'signin_with', width: 280 });
+  } catch (e) { $('gateMsg').textContent = 'Google 登入初始化失敗：' + e; }
+}
+function onGoogleCred(resp){
+  $('gateMsg').style.color = 'var(--muted)';
+  $('gateMsg').textContent = '授權驗證中…';
+  get({action:'googleAuth', credential: resp && resp.credential, gtok: ''}, function(res){
+    if (res.error) { $('gateMsg').style.color = 'var(--bad)'; $('gateMsg').textContent = res.error; return; }
+    GTOK = res.gtok;
+    try { localStorage.setItem('examGtok', GTOK); } catch (e) {}
+    show('loginCard');
+    loadClinics();
+  });
 }
 
 /* ===== 登入 ===== */
@@ -636,7 +699,7 @@ function renderResult(res, isPractice) {
 document.addEventListener('keydown', function(ev){
   if (ev.key === 'Enter' && !$('loginCard').classList.contains('hidden')) doLogin();
 });
-loadClinics();
+boot();
 </script>
 </body>
 </html>
