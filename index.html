@@ -180,7 +180,8 @@
       <button class="btn btn-gold hidden" id="submitBtn" onclick="submitQuiz()">交卷</button>
     </div>
     <div class="dots" id="dots"></div>
-    <p class="note">點選題號可跳題；全部作答完畢後即可交卷。正式測驗僅此一次機會，請謹慎作答。</p>
+    <div class="center" style="margin-top:10px;"><button class="btn btn-ghost" onclick="quitFormal()">← 回選單（暫不作答）</button></div>
+    <p class="note">點選題號可跳題；全部作答完畢後即可交卷。正式測驗交卷後僅此一次機會，請謹慎作答。</p>
   </div>
 
   <!-- 模擬練習作答（即答即回饋） -->
@@ -195,7 +196,7 @@
     <div id="pOpts"></div>
     <div id="pFeedback"></div>
     <div class="navrow">
-      <span></span>
+      <button class="btn btn-ghost" onclick="quitPractice()">← 回選單</button>
       <button class="btn btn-blue hidden" id="pNextBtn" onclick="pNext()">下一題</button>
     </div>
     <p class="note">模擬練習：選擇答案後立即顯示正解與解析，成績不列入紀錄。</p>
@@ -495,6 +496,16 @@ function pPick(i){
 }
 
 function retryPractice(){ startPractice(role); }
+
+/* 回選單（不需重新登入） */
+function quitFormal(){
+  if (!confirm('確定要先回選單嗎？目前作答「不會」送出，之後仍可重新開始這張考卷（交卷後才算作答一次）。')) return;
+  renderMenu();
+}
+function quitPractice(){
+  if (!confirm('確定要結束這組模擬練習回到選單嗎？')) return;
+  renderMenu();
+}
 
 /* ===== 藥品快速閃卡（直讀藥品集 API，不計分） ===== */
 var FC = { drugs: [], idx: 0, back: false };
