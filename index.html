@@ -78,6 +78,16 @@
   .center{text-align:center;}
   .note{font-size:.82rem;color:var(--muted);margin-top:10px;}
   .loading{text-align:center;padding:40px 0;color:var(--muted);}
+  .qphoto{display:block;max-width:320px;max-height:240px;width:auto;margin:0 auto 14px;border:1.5px solid #dde5e3;border-radius:12px;background:#fff;object-fit:contain;}
+  .opt.imgopt{flex-direction:column;align-items:center;text-align:center;}
+  .opt.imgopt img{max-width:100%;max-height:150px;object-fit:contain;border-radius:8px;background:#fff;}
+  .imgopt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:560px){.imgopt-grid{grid-template-columns:1fr;}}
+  .fc-card{max-width:420px;margin:0 auto;border:2px solid var(--brand-light);border-radius:16px;padding:18px;text-align:center;cursor:pointer;min-height:320px;display:flex;flex-direction:column;justify-content:center;align-items:center;background:#fff;}
+  .fc-card img{max-width:100%;max-height:230px;object-fit:contain;}
+  .fc-back{font-size:1.05rem;line-height:1.9;}
+  .fc-back b{color:var(--brand-dark);font-size:1.15rem;}
+  .fc-ctrl{display:flex;justify-content:center;gap:10px;margin-top:16px;flex-wrap:wrap;}
   .spinner{width:36px;height:36px;border:4px solid var(--brand-light);border-top-color:var(--brand);border-radius:50%;margin:0 auto 12px;animation:spin 1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .userbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
@@ -138,6 +148,12 @@
         <div class="role-btn" onclick="startPractice('staff')">
           <div class="icon">💼</div><h3>一般人員版 模擬</h3><p>隨機抽題練習</p>
         </div>
+        <div class="role-btn" onclick="startPractice('pharm')">
+          <div class="icon">💊</div><h3>藥師版 模擬</h3><p>藥品辨識：看圖選藥名／選圖／院內代碼</p>
+        </div>
+        <div class="role-btn" onclick="startFlashcards()">
+          <div class="icon">🃏</div><h3>藥品快速閃卡</h3><p>看圖翻卡記藥名，不計分</p>
+        </div>
       </div>
     </div>
   </div>
@@ -182,6 +198,25 @@
     <p class="note">模擬練習：選擇答案後立即顯示正解與解析，成績不列入紀錄。</p>
   </div>
 
+  <!-- 藥品快速閃卡 -->
+  <div id="flashCard" class="card hidden">
+    <div class="qmeta">
+      <span class="pill practice">🃏 藥品快速閃卡</span>
+      <span id="fcCounter"></span>
+    </div>
+    <div class="fc-card" id="fcCard" onclick="fcFlip()"></div>
+    <div class="fc-ctrl">
+      <button class="btn btn-ghost" onclick="fcMove(-1)">← 上一張</button>
+      <button class="btn btn-blue" onclick="fcFlip()">翻面</button>
+      <button class="btn btn-ghost" onclick="fcMove(1)">下一張 →</button>
+    </div>
+    <div class="fc-ctrl">
+      <button class="btn btn-ghost" onclick="fcShuffle()">🔀 重新洗牌</button>
+      <button class="btn btn-ghost" onclick="renderMenu()">回選單</button>
+    </div>
+    <p class="note">點卡片或「翻面」顯示藥名與院內代碼；資料即時來自院內藥品集，不計分。</p>
+  </div>
+
   <!-- 成績 -->
   <div id="resultCard" class="card hidden">
     <span class="badge" id="passBadge"></span>
@@ -206,6 +241,13 @@ var LETTERS = ['A','B','C','D'];
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function p2(n){ return String(n).padStart(2,'0'); }
+function roleLabel(r){ return r==='doctor' ? '醫師版' : r==='pharm' ? '藥師版' : '一般人員版'; }
+var MED_API = 'https://script.google.com/macros/s/AKfycbyBurrw2JPcBLflnXHJnTsmbYtkwpNIiXWz9t-HZtxZtWHJ5Jyyxr1JzN9aGYf4MKeLIA/exec';
+function qPhotoHtml(q){ return q && q.qimg ? '<img class="qphoto" src="'+esc(q.qimg)+'" alt="藥品照片">' : ''; }
+function optInner(q, text){
+  if (q && q.qtype === 'imgopt') return '<img src="'+esc(text)+'" alt="選項圖片">';
+  return '<span>'+esc(text)+'</span>';
+}
 function nowStr(){ var n=new Date(); return (n.getFullYear()-1911)+'/'+p2(n.getMonth()+1)+'/'+p2(n.getDate())+' '+p2(n.getHours())+':'+p2(n.getMinutes()); }
 
 function get(params, cb) {
@@ -220,7 +262,7 @@ function get(params, cb) {
 }
 
 function show(id) {
-  ['loginCard','menuCard','loadingCard','quizCard','pracCard','resultCard'].forEach(function(c){
+  ['loginCard','menuCard','loadingCard','quizCard','pracCard','flashCard','resultCard'].forEach(function(c){
     $(c).classList.add('hidden');
   });
   $(id).classList.remove('hidden');
@@ -275,7 +317,7 @@ function renderPapers(){
   var html = '<div class="role-grid">';
   _papers.forEach(function(pp, i){
     var rec = att[pp.paperNo];
-    var roleLabel = pp.role==='doctor' ? '🩺 醫師版' : '💼 一般人員版';
+    var roleLabel = pp.role==='doctor' ? '🩺 醫師版' : pp.role==='pharm' ? '💊 藥師版' : '💼 一般人員版';
     var period = (pp.end ? '截止：'+pp.end : '無期限');
     html += '<div class="role-btn '+(rec?'locked':'')+'" onclick="startFormal('+i+')">'
       + (rec ? '<span class="done-tag">已完成 '+rec.score+' 分</span>' : '')
@@ -336,10 +378,13 @@ function renderQ() {
   $('pbar').style.width = (answers.filter(function(a){return a!==null;}).length / n * 100) + '%';
   $('qText').textContent = (idx+1)+'. '+q.q;
   var opts = [q.oA, q.oB, q.oC, q.oD];
-  var html = '';
+  var isImgOpt = q.qtype === 'imgopt';
+  var html = qPhotoHtml(q);
+  if (isImgOpt) html += '<div class="imgopt-grid">';
   for (var i = 0; i < 4; i++) {
-    html += '<div class="opt '+(answers[idx]===i?'sel':'')+'" onclick="pick('+i+')"><span class="abc">'+LETTERS[i]+'.</span><span>'+esc(opts[i])+'</span></div>';
+    html += '<div class="opt '+(isImgOpt?'imgopt':'')+' '+(answers[idx]===i?'sel':'')+'" onclick="pick('+i+')"><span class="abc">'+LETTERS[i]+'.</span>'+optInner(q, opts[i])+'</div>';
   }
+  if (isImgOpt) html += '</div>';
   $('opts').innerHTML = html;
   $('prevBtn').disabled = (idx===0);
   var allDone = answers.every(function(a){return a!==null;});
@@ -393,7 +438,7 @@ function startPractice(r){
     if (res.error) { show('menuCard'); alert(res.error); return; }
     P = { qs: res.questions, idx: 0, correct: 0, answered: false, results: [] };
     PASS_SCORE = res.passScore || 80;
-    $('pRoleTag').textContent = '模擬練習・'+(r==='doctor' ? '醫師版' : '一般人員版');
+    $('pRoleTag').textContent = '模擬練習・'+roleLabel(r);
     show('pracCard');
     renderP();
     window.scrollTo({top:0, behavior:'smooth'});
@@ -408,10 +453,13 @@ function renderP(){
   $('ppbar').style.width = (P.idx / n * 100) + '%';
   $('pQText').textContent = (P.idx+1)+'. '+q.q;
   var opts = [q.oA, q.oB, q.oC, q.oD];
-  var html = '';
+  var isImgOpt = q.qtype === 'imgopt';
+  var html = qPhotoHtml(q);
+  if (isImgOpt) html += '<div class="imgopt-grid">';
   for (var i = 0; i < 4; i++) {
-    html += '<div class="opt" id="popt-'+i+'" onclick="pPick('+i+')"><span class="abc">'+LETTERS[i]+'.</span><span>'+esc(opts[i])+'</span></div>';
+    html += '<div class="opt '+(isImgOpt?'imgopt':'')+'" id="popt-'+i+'" onclick="pPick('+i+')"><span class="abc">'+LETTERS[i]+'.</span>'+optInner(q, opts[i])+'</div>';
   }
+  if (isImgOpt) html += '</div>';
   $('pOpts').innerHTML = html;
   $('pFeedback').innerHTML = '';
   $('pNextBtn').classList.add('hidden');
@@ -443,6 +491,54 @@ function pPick(i){
 
 function retryPractice(){ startPractice(role); }
 
+/* ===== 藥品快速閃卡（直讀藥品集 API，不計分） ===== */
+var FC = { drugs: [], idx: 0, back: false };
+function startFlashcards(){
+  if (FC.drugs.length) { FC.idx = 0; FC.back = false; show('flashCard'); renderFC(); return; }
+  $('loadingText').textContent = '藥品集載入中…';
+  show('loadingCard');
+  fetch(MED_API + '?action=search&q=&limit=500')
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      var list = (res && res.ok && res.data) ? res.data : [];
+      FC.drugs = list.filter(function(d){ return String(d.photo_url || '').trim(); });
+      if (!FC.drugs.length) { show('menuCard'); alert('藥品集中目前沒有含照片的品項'); return; }
+      fcDoShuffle();
+      show('flashCard');
+      renderFC();
+      window.scrollTo({top:0, behavior:'smooth'});
+    })
+    .catch(function(err){ show('menuCard'); alert('藥品集載入失敗：'+err); });
+}
+function fcDoShuffle(){
+  for (var i = FC.drugs.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random()*(i+1));
+    var t = FC.drugs[i]; FC.drugs[i] = FC.drugs[j]; FC.drugs[j] = t;
+  }
+  FC.idx = 0; FC.back = false;
+}
+function renderFC(){
+  var d = FC.drugs[FC.idx];
+  $('fcCounter').textContent = '第 '+(FC.idx+1)+' / '+FC.drugs.length+' 張';
+  if (!FC.back) {
+    $('fcCard').innerHTML = '<img src="'+esc(d.photo_url)+'" alt="藥品照片"><p class="note" style="margin-top:10px;">點卡片翻面看答案</p>';
+  } else {
+    var zh = esc(d.name_zh||''), en = esc(d.name_en||'');
+    $('fcCard').innerHTML = '<div class="fc-back">'
+      + '<b>'+zh+'</b>'+(en?'<br>'+en:'')
+      + (d.generic_name ? '<br><span style="color:var(--muted);">學名 '+esc(d.generic_name)+'</span>' : '')
+      + (d.product_code ? '<br>院內代碼：<b>'+esc(d.product_code)+'</b>' : '')
+      + (d.category ? '<br><span style="color:var(--muted);">分類 '+esc(d.category)+'</span>' : '')
+      + '</div>';
+  }
+}
+function fcFlip(){ FC.back = !FC.back; renderFC(); }
+function fcMove(d){
+  FC.idx = (FC.idx + d + FC.drugs.length) % FC.drugs.length;
+  FC.back = false; renderFC();
+}
+function fcShuffle(){ fcDoShuffle(); renderFC(); }
+
 function pNext(){
   if (P.idx < P.qs.length-1) { P.idx++; renderP(); window.scrollTo({top:0, behavior:'smooth'}); }
   else renderPracResult();
@@ -456,7 +552,8 @@ function renderPracResult(){
     pass: score >= PASS_SCORE, passScore: PASS_SCORE,
     review: P.results.map(function(r){
       return { q:r.q.q, oA:r.q.oA, oB:r.q.oB, oC:r.q.oC, oD:r.q.oD,
-        your:r.your, ans:r.q.ans, ok:r.ok, explain:r.q.explain, source:r.q.source };
+        your:r.your, ans:r.q.ans, ok:r.ok, explain:r.q.explain, source:r.q.source,
+        qtype:r.q.qtype, qimg:r.q.qimg };
     })
   };
   renderResult(res, true);
@@ -475,7 +572,7 @@ function renderResult(res, isPractice) {
   $('scoreNum').textContent = res.score + ' 分';
   $('scoreNum').className = 'score-big ' + (res.pass ? 'pass' : 'fail');
   var info = '受測人：<b>'+esc(AUTH ? AUTH.name : '')+'</b>（'+esc(AUTH ? AUTH.clinic : '')+'・'+esc(AUTH ? AUTH.empId : '')+'）'
-    + (isPractice ? '｜'+(role==='doctor'?'醫師版':'一般人員版')+'模擬' : '｜'+esc(res.paperNo||'')+' '+esc(res.paperName||''))
+    + (isPractice ? '｜'+roleLabel(role)+'模擬' : '｜'+esc(res.paperNo||'')+' '+esc(res.paperName||''))
     + '｜答對 '+res.correct+'/'+res.total+' 題｜'+nowStr()
     + (isPractice ? '' : '（成績已回報，每帳號每卷限作答一次）');
   $('scoreSub').innerHTML = info;
@@ -485,11 +582,20 @@ function renderResult(res, isPractice) {
   var html = '';
   res.review.forEach(function(r, i){
     var opts = {A:r.oA, B:r.oB, C:r.oC, D:r.oD};
+    var isImgOpt = r.qtype === 'imgopt';
+    function optLabel(letter){
+      var v = opts[letter] || '';
+      if (isImgOpt) return letter + ' 選項圖片';
+      return letter + '. ' + esc(v);
+    }
     html += '<div class="review-q '+(r.ok?'ok':'ng')+'">'
       + '<span class="tag '+(r.ok?'ok':'ng')+'">'+(r.ok?'✔ 答對':'✘ 答錯')+'</span>'
       + '<h4>'+(i+1)+'. '+esc(r.q)+'</h4>'
-      + '<p>您的作答：'+r.your+'. '+esc(opts[r.your]||'')+'</p>'
-      + (r.ok ? '' : '<p><b>正確答案：'+r.ans+'. '+esc(opts[r.ans]||'')+'</b></p>')
+      + qPhotoHtml(r)
+      + '<p>您的作答：'+optLabel(r.your)+'</p>'
+      + (isImgOpt && opts[r.your] ? '<img class="qphoto" style="max-height:120px;" src="'+esc(opts[r.your])+'">' : '')
+      + (r.ok ? '' : '<p><b>正確答案：'+optLabel(r.ans)+'</b></p>')
+      + (!r.ok && isImgOpt && opts[r.ans] ? '<img class="qphoto" style="max-height:120px;" src="'+esc(opts[r.ans])+'">' : '')
       + '<p>'+esc(r.explain||'')+'</p>'
       + (r.source ? '<p class="src">📄 出處：'+esc(r.source)+'</p>' : '')
       + '</div>';
