@@ -505,7 +505,7 @@ function doAiDiag(){
 
 /* 從藥品集出題：讀取院內藥品集網站，產生辨識題（看圖選藥名／看藥名選圖／院內代碼題）進備用池並補滿待審 */
 function doGenPharm(){
-  if (!confirm('要從院內藥品集產生 30 題藥品辨識題嗎？（混合：看圖選藥名／看藥名選圖／院內代碼題）題目會進入藥師版備用題庫，並自動補滿待審池。')) return;
+  if (!confirm('要從院內藥品集產生 30 題藥品辨識題嗎？（混合：看圖選藥名／看藥名選圖）題目會進入藥師版備用題庫，並自動補滿待審池。')) return;
   toast('正在讀取藥品集出題，請稍候…');
   get({action:'genPharmQuestions', count:30}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
