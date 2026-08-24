@@ -143,7 +143,7 @@
 
     <div class="mode-block" style="border-color:#dbe6f5;">
       <h3 style="color:var(--blue);">🎯 模擬練習</h3>
-      <p class="desc">醫師版／一般版：每次從「已上架題庫」隨機抽題；藥師版：每次由藥品集即時出全新辨識題。答完每題立即顯示正解與解析，成績不列入紀錄，可無限次練習。</p>
+      <p class="desc">醫師版／一般版／新進人員版：每次從「已上架題庫」隨機抽題；藥師版：每次由藥品集即時出全新辨識題。答完每題立即顯示正解與解析，成績不列入紀錄，可無限次練習。</p>
       <label class="field" style="margin-top:10px;">練習題數</label>
       <select class="inp" id="pracCount" style="max-width:220px;">
         <option value="5">5 題（快速練習）</option>
@@ -159,6 +159,12 @@
         </div>
         <div class="role-btn" onclick="startPractice('staff')">
           <div class="icon">💼</div><h3>一般人員版 模擬</h3><p>隨機抽題練習</p>
+        </div>
+        <div class="role-btn" onclick="startPractice('newbie')">
+          <div class="icon">🌱</div><h3>新進人員版 模擬</h3><p>新進人員考核：隨機抽題練習</p>
+        </div>
+        <div class="role-btn" onclick="startPractice('wldoc')">
+          <div class="icon">⚖️</div><h3>減重醫師版 模擬</h3><p>碳循環減重 QA：隨機抽題練習</p>
         </div>
         <div class="role-btn" onclick="startPractice('pharm')">
           <div class="icon">💊</div><h3>藥師版 模擬</h3><p>藥品辨識：看圖選藥名／看藥名選圖</p>
@@ -254,7 +260,7 @@ var LETTERS = ['A','B','C','D'];
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function p2(n){ return String(n).padStart(2,'0'); }
-function roleLabel(r){ return r==='doctor' ? '醫師版' : r==='pharm' ? '藥師版' : '一般人員版'; }
+function roleLabel(r){ return r==='doctor' ? '醫師版' : r==='pharm' ? '藥師版' : r==='newbie' ? '新進人員版' : r==='wldoc' ? '減重醫師版' : '一般人員版'; }
 /* 藥品集資料改由考題系統 API（action=listDrugs）直讀原始試算表提供，快速且格式固定 */
 function qPhotoHtml(q){ return q && q.qimg ? '<img class="qphoto" src="'+esc(q.qimg)+'" alt="藥品照片">' : ''; }
 function optInner(q, text){
@@ -384,7 +390,7 @@ function renderPapers(){
   var html = '<div class="role-grid">';
   _papers.forEach(function(pp, i){
     var rec = att[pp.paperNo];
-    var roleLabel = pp.role==='doctor' ? '🩺 醫師版' : pp.role==='pharm' ? '💊 藥師版' : '💼 一般人員版';
+    var roleLabel = pp.role==='doctor' ? '🩺 醫師版' : pp.role==='pharm' ? '💊 藥師版' : pp.role==='newbie' ? '🌱 新進人員版' : pp.role==='wldoc' ? '⚖️ 減重醫師版' : '💼 一般人員版';
     var period = (pp.end ? '截止：'+pp.end : '無期限');
     html += '<div class="role-btn '+(rec?'locked':'')+'" onclick="startFormal('+i+')">'
       + (rec ? '<span class="done-tag">已完成 '+rec.score+' 分</span>' : '')
