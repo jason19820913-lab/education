@@ -306,7 +306,9 @@ function filterFromCard(role, status){
 /* ===== 考卷管理 ===== */
 var _papers = [];
 var _pickPool = []; // 目前身分別的已上架題目
+var _editingPaper = null; // 編輯模式中的考卷（null＝建立模式）
 function loadPapers(){
+  _editingPaper = null;
   $('listArea').innerHTML = '<div class="loading">載入中…</div>';
   get({action:'listPapersAdmin'}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
@@ -318,20 +320,24 @@ function loadPapers(){
       html += '<table><tr><th>卷號</th><th>卷名</th><th>身分別</th><th>題數</th><th>開放期間</th><th>狀態</th><th>作答數</th><th>平均分</th><th>及格率</th><th></th></tr>';
       _papers.forEach(function(pp, i){
         var period = (pp.start||'即日')+' ~ '+(pp.end||'不限');
-        var st = pp.status==='disabled' ? '<span class="chip rejected">已停用</span>'
+        var st = pp.status==='draft' ? '<span class="chip draft">📝 草稿</span>'
+          : pp.status==='disabled' ? '<span class="chip rejected">已停用</span>'
           : (pp.open ? '<span class="chip approved">開放中</span>' : '<span class="chip draft">未在期間</span>');
+        var btns = '<button class="btn btn-ghost" onclick="editPaper('+i+')">✏️ 編輯</button> ';
+        if (pp.status==='draft') btns += '<button class="btn btn-ok" onclick="publishPaper('+i+')">🚀 發布</button>';
+        else if (pp.status==='disabled') btns += '<button class="btn btn-ok" onclick="togglePaper('+i+',\'enabled\')">啟用</button>';
+        else btns += '<button class="btn btn-bad" onclick="togglePaper('+i+',\'disabled\')">停用</button>';
         html += '<tr><td><b>'+esc(pp.paperNo)+'</b></td><td>'+esc(pp.name)+'</td>'
           + '<td>'+roleLabel(pp.role)+'</td><td>'+pp.count+'</td>'
           + '<td>'+esc(period)+'</td><td>'+st+'</td>'
           + '<td>'+pp.takers+'</td><td>'+(pp.avgScore===''?'—':pp.avgScore)+'</td><td>'+(pp.passRate===''?'—':pp.passRate+'%')+'</td>'
-          + '<td>'+(pp.status==='disabled'
-              ? '<button class="btn btn-ok" onclick="togglePaper('+i+',\'enabled\')">啟用</button>'
-              : '<button class="btn btn-bad" onclick="togglePaper('+i+',\'disabled\')">停用</button>')+'</td></tr>';
+          + '<td style="white-space:nowrap;">'+btns+'</td></tr>';
       });
       html += '</table>';
     }
     html += '<hr style="margin:18px 0;border:none;border-top:1px solid #e6ebea;">'
-      + '<h3 style="color:var(--brand-dark);">➕ 建立新考卷</h3>'
+      + '<h3 id="npFormTitle" style="color:var(--brand-dark);">➕ 建立新考卷</h3>'
+      + '<div id="npEditNote"></div>'
       + '<div class="row2">'
       + '<div class="fld"><label>考卷名稱</label><input id="npName" placeholder="例：115年9月 醫師月考"></div>'
       + '<div class="fld"><label>身分別</label><select id="npRole" onchange="loadPickPool()">'
@@ -348,26 +354,42 @@ function loadPapers(){
       + '</div>'
       + '<p class="note">下方列出該身分別「已上架」題目（依來源檔案 新→舊），可手動勾選、或按「🎲 隨機選題」自動勾選；已勾 <b id="pickCount">0</b> 題。</p>'
       + '<div id="pickList" style="max-height:420px;overflow-y:auto;border:1.5px solid #e2e9e7;border-radius:10px;padding:10px;margin-top:8px;"></div>'
-      + '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="doCreatePaper()">📋 建立考卷</button></div>';
+      + '<div id="npBtns" style="margin-top:14px;"></div>';
     $('listArea').innerHTML = html;
+    renderPaperBtns();
     loadPickPool();
   });
 }
 
-function loadPickPool(){
+function renderPaperBtns(){
+  var el = $('npBtns'); if (!el) return;
+  if (_editingPaper) {
+    var h = '<button class="btn btn-primary" onclick="doUpdatePaper(null)">💾 儲存修改</button> ';
+    if (_editingPaper.status==='draft') h += '<button class="btn btn-ok" onclick="doUpdatePaper(\'enabled\')">🚀 儲存並發布</button> ';
+    h += '<button class="btn btn-ghost" onclick="cancelEditPaper()">取消編輯</button>';
+    el.innerHTML = h;
+  } else {
+    el.innerHTML = '<button class="btn btn-gold" onclick="doCreatePaper(\'draft\')">📝 儲存為草稿</button> '
+      + '<button class="btn btn-primary" onclick="doCreatePaper(\'enabled\')">📋 建立並發布</button>';
+  }
+}
+
+function loadPickPool(preQids){
   var role = $('npRole').value;
   $('pickList').innerHTML = '<div class="loading">題目載入中…</div>';
   get({action:'listQ', status:'approved'}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
     _pickPool = (res.questions || []).filter(function(q){ return q.role === role; });
     if (!_pickPool.length) { $('pickList').innerHTML = '<div class="empty">此身分別尚無已上架題目，請先至「待審核」核准題目</div>'; updatePickCount(); return; }
+    var pre = {};
+    (preQids || []).forEach(function(id){ pre[String(id)] = true; });
     var html = '';
     var lastFile = '';
     _pickPool.forEach(function(q, i){
       var fkey = (q.fileName||'')+'（'+(q.fileDate||'')+'）';
       if (fkey !== lastFile) { html += '<div style="font-size:.78rem;font-weight:700;color:var(--muted);margin:10px 0 4px;">📄 '+esc(fkey)+'</div>'; lastFile = fkey; }
       html += '<label style="display:flex;gap:8px;align-items:flex-start;font-size:.88rem;padding:4px 2px;cursor:pointer;">'
-        + '<input type="checkbox" class="pickbox" data-i="'+i+'" onchange="updatePickCount()" style="width:auto;margin-top:4px;">'
+        + '<input type="checkbox" class="pickbox" data-i="'+i+'" onchange="updatePickCount()" style="width:auto;margin-top:4px;"'+(pre[q.id]?' checked':'')+'>'
         + '<span>'+esc(q.q)+' <span style="color:var(--muted);">（答案 '+esc(q.ans)+'）</span>'
         + (q.qimg ? '<img class="qimg-opt" src="'+esc(q.qimg)+'" loading="lazy">' : '')
         + '</span></label>';
@@ -396,15 +418,81 @@ function randomPick(){
   toast('已隨機勾選 '+n+' 題，可再手動調整');
 }
 
-function doCreatePaper(){
-  var name = $('npName').value.trim();
-  if (!name) { toast('請輸入考卷名稱','err'); return; }
+function collectPickedQids(){
   var qids = [];
   pickBoxes().forEach(function(b){ if (b.checked) { var q = _pickPool[Number(b.getAttribute('data-i'))]; if (q) qids.push(q.id); } });
+  return qids;
+}
+
+function doCreatePaper(status){
+  var name = $('npName').value.trim();
+  if (!name) { toast('請輸入考卷名稱','err'); return; }
+  var qids = collectPickedQids();
   if (!qids.length) { toast('請至少勾選一題（或按隨機選題）','err'); return; }
-  get({action:'createPaper', name:name, role:$('npRole').value, qids:qids.join(','), start:$('npStart').value, end:$('npEnd').value}, function(res){
+  get({action:'createPaper', name:name, role:$('npRole').value, qids:qids.join(','), start:$('npStart').value, end:$('npEnd').value, status:(status==='draft'?'draft':'')}, function(res){
     if (res.error) { toast(res.error,'err'); return; }
-    toast('已建立考卷 '+res.paperNo+'「'+res.name+'」共 '+res.count+' 題');
+    toast(res.status==='draft'
+      ? '已儲存草稿 '+res.paperNo+'「'+res.name+'」共 '+res.count+' 題（前台不會顯示，發布後才開放）'
+      : '已建立考卷 '+res.paperNo+'「'+res.name+'」共 '+res.count+' 題');
+    loadPapers();
+  });
+}
+
+function editPaper(i){
+  var pp = _papers[i];
+  if (!pp) { toast('請重新整理','err'); return; }
+  _editingPaper = pp;
+  $('npFormTitle').textContent = '✏️ 編輯考卷 '+pp.paperNo+'「'+pp.name+'」';
+  $('npEditNote').innerHTML = pp.takers > 0
+    ? '<p class="note" style="color:#b45309;">⚠️ 此卷已有 '+pp.takers+' 人作答。修改不影響已交卷的成績，但之後作答的人會看到修改後的內容；若差異較大，建議另建新卷。</p>'
+    : '';
+  $('npName').value = pp.name || '';
+  $('npRole').value = pp.role;
+  $('npStart').value = pp.start || '';
+  $('npEnd').value = pp.end || '';
+  renderPaperBtns();
+  loadPickPool(pp.qids);
+  var t = $('npFormTitle');
+  if (t && t.scrollIntoView) t.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function cancelEditPaper(){
+  _editingPaper = null;
+  $('npFormTitle').textContent = '➕ 建立新考卷';
+  $('npEditNote').innerHTML = '';
+  $('npName').value = '';
+  $('npStart').value = '';
+  $('npEnd').value = '';
+  renderPaperBtns();
+  loadPickPool();
+}
+
+function doUpdatePaper(newStatus){
+  var pp = _editingPaper;
+  if (!pp) { toast('請重新整理','err'); return; }
+  var name = $('npName').value.trim();
+  if (!name) { toast('請輸入考卷名稱','err'); return; }
+  var qids = collectPickedQids();
+  if (!qids.length) { toast('請至少勾選一題（或按隨機選題）','err'); return; }
+  if (newStatus==='enabled' && !confirm('確定發布考卷 '+pp.paperNo+'「'+name+'」？發布後前台（在開放期間內）即可作答。')) return;
+  var params = {action:'updatePaper', paperNo:pp.paperNo, name:name, role:$('npRole').value, qids:qids.join(','), start:$('npStart').value, end:$('npEnd').value};
+  if (newStatus) params.status = newStatus;
+  get(params, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast(newStatus==='enabled'
+      ? '已發布考卷 '+res.paperNo+'「'+res.name+'」共 '+res.count+' 題'
+      : '已儲存修改：'+res.paperNo+'「'+res.name+'」共 '+res.count+' 題');
+    loadPapers();
+  });
+}
+
+function publishPaper(i){
+  var pp = _papers[i];
+  if (!pp) { toast('請重新整理','err'); return; }
+  if (!confirm('確定發布草稿 '+pp.paperNo+'「'+pp.name+'」？發布後前台（在開放期間內）即可作答。')) return;
+  get({action:'setPaperStatus', paperNo:pp.paperNo, status:'enabled'}, function(res){
+    if (res.error) { toast(res.error,'err'); return; }
+    toast('已發布 '+pp.paperNo);
     loadPapers();
   });
 }
